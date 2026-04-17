@@ -1,0 +1,61 @@
+[build]
+  command   = "npm run build"
+  publish   = "dist"
+  functions = "netlify/functions"
+
+# ============================================
+# SECURITY HEADERS
+# ============================================
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# ============================================
+# RATE LIMITING
+# ============================================
+[[rateLimit]]
+  from = "/.netlify/functions/verify-payment"
+  aggregate_by = ["ip"]
+  window_limit = 5
+  window_size = 60
+  action = "deny"
+
+[[rateLimit]]
+  from = "/.netlify/functions/recover-unlocks"
+  aggregate_by = ["ip"]
+  window_limit = 10
+  window_size = 60
+  action = "deny"
+
+[[rateLimit]]
+  from = "/.netlify/functions/rpc-proxy"
+  aggregate_by = ["ip"]
+  window_limit = 30
+  window_size = 60
+  action = "deny"
+
+[[rateLimit]]
+  from = "/.netlify/functions/validate-tokens"
+  aggregate_by = ["ip"]
+  window_limit = 20
+  window_size = 60
+  action = "deny"

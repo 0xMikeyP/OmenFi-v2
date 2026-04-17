@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OmenFi. Read the Market. Stack with Foresight.</title>
+  <meta name="description" content="OmenFi reveals when to buy more and when to hold back. Built on real historical crypto data, it decodes seasonal patterns so you can make every dollar count." />
+  <!-- Open Graph / Social sharing -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://voluble-hamster-4d684d.netlify.app/" />
+  <meta property="og:title" content="OmenFi. Read the Market. Stack with Foresight." />
+  <meta property="og:description" content="OmenFi reveals when to buy more and when to hold back. Built on real historical crypto data, it decodes seasonal patterns so you can make every dollar count." />
+  <meta property="og:image" content="https://voluble-hamster-4d684d.netlify.app/og-image.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="600" />
+  <!-- Twitter/X card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="OmenFi. Read the Market. Stack with Foresight." />
+  <meta name="twitter:description" content="OmenFi reveals when to buy more and when to hold back. Built on real historical crypto data, it decodes seasonal patterns so you can make every dollar count." />
+  <meta name="twitter:image" content="https://voluble-hamster-4d684d.netlify.app/og-image.jpg" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0a0608">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div class="noise-overlay"></div>
+  <div class="hex-bg"></div>
+  <div class="vignette"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+          <ellipse cx="14" cy="14" rx="13" ry="13" stroke="url(#eg)" stroke-width="1.5"/>
+          <ellipse cx="14" cy="14" rx="8" ry="8" fill="url(#eg)" opacity="0.15"/>
+          <circle cx="14" cy="14" r="4" fill="url(#eg)"/>
+          <circle cx="14" cy="14" r="1.5" fill="#0a0608"/>
+          <line x1="1" y1="14" x2="5" y2="14" stroke="url(#eg)" stroke-width="1.2"/>
+          <line x1="23" y1="14" x2="27" y2="14" stroke="url(#eg)" stroke-width="1.2"/>
+          <defs><linearGradient id="eg" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#ff8c2a"/><stop offset="100%" stop-color="#ff3a5c"/>
+          </linearGradient></defs>
+        </svg>
+        <span class="logo-text">OmenFi</span>
+        <span class="logo-tag">BETA</span>
+        <span style="font-size:0.55rem;color:#ff8c2a;opacity:0.8;font-family:monospace;margin-left:4px">v5.7</span>
+      </div>
+      <button class="wallet-btn" id="wallet-btn">
+        <span class="wallet-btn-icon">◎</span>
+        <span class="wallet-btn-text" id="wallet-btn-text">Connect</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Tab Nav -->
+  <nav class="tab-nav">
+    <div class="tab-nav-inner">
+      <button class="tab-btn active" data-tab="simulator">⚡ DCA Backtester</button>
+      <button class="tab-btn" data-tab="calendar">📅 Signal Calendar</button>
+    </div>
+  </nav>
+
+  <!-- ===== SIMULATOR TAB ===== -->
+  <div class="tab-content active" id="tab-simulator">
+    <div class="hero-strip">
+      <div class="hero-inner">
+        <div class="hero-eyebrow">◈ Historical DCA Backtester</div>
+        <h1 class="hero-title">What would you have<br/><span class="hero-accent">actually made?</span></h1>
+        <p class="hero-sub">OmenFi reveals when to buy more and when to hold back. Built on real historical crypto data, it decodes seasonal patterns so you can make every dollar count.<br><br><strong style="color:var(--accent)">Stop guessing. Start stacking smarter.</strong></p>
+      </div>
+    </div>
+
+    <main class="app-main">
+      <!-- Builder -->
+      <section class="panel" id="panel-builder">
+        <div class="panel-label">◈ I — Build Your Backtest</div>
+        <div class="builder-grid">
+
+          <div class="input-group">
+            <label class="input-label">Asset</label>
+            <div class="asset-selector" id="asset-selector">
+              <button class="asset-card active" data-id="bitcoin">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/1.png" alt="BTC"/>
+                <div class="asset-info"><span class="asset-name">Bitcoin</span><span class="asset-sym">BTC</span></div>
+                <span class="asset-badge free-badge">FREE</span>
+              </button>
+              <button class="asset-card locked" data-id="ethereum">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png" alt="ETH"/>
+                <div class="asset-info"><span class="asset-name">Ethereum</span><span class="asset-sym">ETH</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+              <button class="asset-card locked" data-id="ripple">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/52.png" alt="XRP"/>
+                <div class="asset-info"><span class="asset-name">XRP</span><span class="asset-sym">XRP</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+              <button class="asset-card locked" data-id="solana">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png" alt="SOL"/>
+                <div class="asset-info"><span class="asset-name">Solana</span><span class="asset-sym">SOL</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+              <button class="asset-card locked" data-id="binancecoin">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png" alt="BNB"/>
+                <div class="asset-info"><span class="asset-name">BNB</span><span class="asset-sym">BNB</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+              <button class="asset-card locked" data-id="dogecoin">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/74.png" alt="DOGE"/>
+                <div class="asset-info"><span class="asset-name">Dogecoin</span><span class="asset-sym">DOGE</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+              <button class="asset-card locked" data-id="cardano">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/2010.png" alt="ADA"/>
+                <div class="asset-info"><span class="asset-name">Cardano</span><span class="asset-sym">ADA</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+              <button class="asset-card locked" data-id="avalanche">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/5805.png" alt="AVAX"/>
+                <div class="asset-info"><span class="asset-name">Avalanche</span><span class="asset-sym">AVAX</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+              <button class="asset-card locked" data-id="shibainu">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/5994.png" alt="SHIB"/>
+                <div class="asset-info"><span class="asset-name">SHIB</span><span class="asset-sym">SHIB</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+              <button class="asset-card locked" data-id="hedera">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/4642.png" alt="HBAR"/>
+                <div class="asset-info"><span class="asset-name">Hedera</span><span class="asset-sym">HBAR</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+              <button class="asset-card locked" data-id="sui">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/20947.png" alt="SUI"/>
+                <div class="asset-info"><span class="asset-name">Sui</span><span class="asset-sym">SUI</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+              <button class="asset-card locked" data-id="chainlink">
+                <img class="asset-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/1975.png" alt="LINK"/>
+                <div class="asset-info"><span class="asset-name">Chainlink</span><span class="asset-sym">LINK</span></div>
+                <span class="asset-badge locked-badge">0.05 SOL</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Unlock All Assets button — shown/hidden by JS based on wallet state -->
+          <div id="unlock-all-bar" style="display:none;margin-bottom:14px">
+            <button class="run-btn" id="main-unlock-all-btn" style="width:100%;font-size:0.82rem">
+              <span>🔓 Unlock All Assets — 0.2 SOL</span><span>→</span>
+            </button>
+            <p style="font-size:0.68rem;color:var(--t3);text-align:center;margin-top:6px;font-family:var(--fb)">Save 0.35 SOL vs buying individually · One-time · Never expires</p>
+          </div>
+
+          <div class="quick-presets">
+            <span class="preset-label">Quick periods:</span>
+            <button class="preset-btn" data-years="1">1 Year</button>
+            <button class="preset-btn" data-years="2">2 Years</button>
+            <button class="preset-btn active" data-years="3">3 Years</button>
+            <button class="preset-btn" data-years="5">5 Years</button>
+            <button class="preset-btn" data-years="10">10 Years</button>
+          </div>
+
+          <div class="input-row">
+            <div class="input-group">
+              <label class="input-label">Start Date <span class="label-note">(must be in the past)</span></label>
+              <input type="date" id="start-date" class="styled-input" />
+            </div>
+            <div class="input-group">
+              <label class="input-label">End Date <span class="label-note">(up to today)</span></label>
+              <input type="date" id="end-date" class="styled-input" />
+            </div>
+          </div>
+
+          <div class="input-row">
+            <div class="input-group">
+              <label class="input-label">Amount per buy (USD)</label>
+              <div class="input-wrap">
+                <span class="input-prefix">$</span>
+                <input type="number" id="amount" value="100" min="1" class="styled-input" />
+              </div>
+            </div>
+            <div class="input-group">
+              <label class="input-label">Frequency</label>
+              <div class="freq-pills">
+                <button class="freq-pill" data-freq="daily">Daily</button>
+                <button class="freq-pill active" data-freq="weekly">Weekly</button>
+                <button class="freq-pill" data-freq="monthly">Monthly</button>
+              </div>
+            </div>
+          </div>
+
+          <button class="run-btn" id="run-btn">
+            <span>Run Backtest</span>
+            <span class="run-arrow">→</span>
+          </button>
+          <p style="font-size:0.68rem;color:var(--t3);text-align:center;margin-top:10px;line-height:1.5;font-family:var(--fb);">⚠ For informational purposes only. Not financial advice. Past performance does not guarantee future results.</p>
+        </div>
+      </section>
+
+      <!-- States -->
+      <div class="loading-state" id="loading-state" style="display:none">
+        <div class="loader-ring"></div>
+        <p class="loading-msg" id="loading-msg">Fetching historical data...</p>
+      </div>
+      <div class="error-state" id="error-state" style="display:none">
+        <span class="error-icon">⚠</span>
+        <p class="error-msg" id="error-msg"></p>
+        <button class="retry-btn" id="retry-btn">Try Again</button>
+      </div>
+
+      <!-- Results -->
+      <div id="results-area" style="display:none;flex-direction:column;gap:24px;">
+
+        <!-- Metrics -->
+        <section class="panel" id="panel-results">
+          <div class="panel-label">◈ II — Backtest Results</div>
+          <div class="results-meta" id="results-meta"></div>
+          <div class="metrics-grid">
+            <div class="metric-card hero-card">
+              <div class="metric-label">Final Portfolio Value</div>
+              <div class="metric-value hero-value" id="m-value">—</div>
+              <div class="metric-change" id="m-change">—</div>
+            </div>
+            <div class="metric-card hero-card coin-hero">
+              <div class="metric-label">Optimized — Coins Accumulated</div>
+              <div class="metric-value hero-value green" id="m-opt-coins">—</div>
+              <div class="metric-change" id="m-coin-diff">—</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Total Invested</div>
+              <div class="metric-value" id="m-invested">—</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Net Profit</div>
+              <div class="metric-value" id="m-return">—</div>
+            </div>
+            <div class="metric-card highlight">
+              <div class="metric-label">ROI</div>
+              <div class="metric-value" id="m-roi">—</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Buys Executed</div>
+              <div class="metric-value" id="m-buys">—</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Avg Buy Price</div>
+              <div class="metric-value" id="m-avg-price">—</div>
+            </div>
+            <div class="metric-card coin-card">
+              <div class="metric-label">Std DCA — Coins</div>
+              <div class="metric-value" id="m-std-coins">—</div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-top-bar">
+              <div class="chart-view-toggle">
+                <button class="cvt-btn active" id="cvt-dollar" data-view="dollar">$ Value</button>
+                <button class="cvt-btn" id="cvt-coin" data-view="coin">Coins</button>
+              </div>
+            </div>
+            <div class="chart-container" id="chart-container">
+              <canvas id="dcaChart"></canvas>
+              <div class="chart-crosshair" id="chart-crosshair" style="display:none"></div>
+            </div>
+            <div class="chart-scrub-bar" id="chart-scrub-bar">
+              <div class="csb-header-row">
+                <span class="csb-date" id="csb-date">Drag to explore</span>
+                <span class="csb-view-label" id="csb-view-label">Dollar View</span>
+              </div>
+              <div class="csb-stats-grid" id="csb-stats"></div>
+            </div>
+            <div class="chart-hint">← Drag or tap chart to explore →</div>
+          </div>
+        </section>
+
+
+
+        <!-- Current Month Indicator — FREE -->
+        <div class="current-month-indicator" id="current-month-indicator" style="display:none"></div>
+
+        <!-- Strategy Report -->
+        <section class="panel" id="panel-optimizer">
+          <div class="panel-label">◈ III — Strategy Report</div>
+          <p class="section-intro">Your personalized DCA playbook — when to skip, when to go heavy, and how much more of the underlying asset you accumulate.</p>
+          <div id="optimizer-content"></div>
+        </section>
+
+        <!-- Forward Planner -->
+        <section class="panel" id="panel-planner">
+          <div class="panel-label">◈ IV — Forward Planner</div>
+          <p class="section-intro">History repeats its patterns. Use the seasonal data to plan your next 12 months — see exactly which months are coming up and what to do in each one.</p>
+          <div id="planner-content"></div>
+        </section>
+
+
+
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ===== CALENDAR TAB ===== -->
+  <div class="tab-content" id="tab-calendar">
+    <main class="app-main">
+
+      <section class="panel">
+        <div class="panel-label">◈ Select Asset</div>
+        <p class="section-intro">Historical monthly performance. Bitcoin is free. Unlock others with SOL.</p>
+        <div class="cal-asset-grid" id="cal-asset-grid">
+          <button class="cal-asset-btn active" data-id="bitcoin"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/1.png" alt="BTC"/><span class="cal-name">Bitcoin</span><span class="cal-sym">BTC</span><span class="cal-status free">FREE</span></button>
+          <button class="cal-asset-btn locked" data-id="ethereum"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png" alt="ETH"/><span class="cal-name">Ethereum</span><span class="cal-sym">ETH</span><span class="cal-status locked">0.05 SOL</span></button>
+          <button class="cal-asset-btn locked" data-id="ripple"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/52.png" alt="XRP"/><span class="cal-name">XRP</span><span class="cal-sym">XRP</span><span class="cal-status locked">0.05 SOL</span></button>
+          <button class="cal-asset-btn locked" data-id="solana"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png" alt="SOL"/><span class="cal-name">Solana</span><span class="cal-sym">SOL</span><span class="cal-status locked">0.05 SOL</span></button>
+          <button class="cal-asset-btn locked" data-id="binancecoin"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/1839.png" alt="BNB"/><span class="cal-name">BNB</span><span class="cal-sym">BNB</span><span class="cal-status locked">0.05 SOL</span></button>
+          <button class="cal-asset-btn locked" data-id="dogecoin"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/74.png" alt="DOGE"/><span class="cal-name">Dogecoin</span><span class="cal-sym">DOGE</span><span class="cal-status locked">0.05 SOL</span></button>
+          <button class="cal-asset-btn locked" data-id="cardano"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/2010.png" alt="ADA"/><span class="cal-name">Cardano</span><span class="cal-sym">ADA</span><span class="cal-status locked">0.05 SOL</span></button>
+          <button class="cal-asset-btn locked" data-id="avalanche"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/5805.png" alt="AVAX"/><span class="cal-name">Avalanche</span><span class="cal-sym">AVAX</span><span class="cal-status locked">0.05 SOL</span></button>
+          <button class="cal-asset-btn locked" data-id="shibainu"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/5994.png" alt="SHIB"/><span class="cal-name">SHIB</span><span class="cal-sym">SHIB</span><span class="cal-status locked">0.05 SOL</span></button>
+          <button class="cal-asset-btn locked" data-id="hedera"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/4642.png" alt="HBAR"/><span class="cal-name">Hedera</span><span class="cal-sym">HBAR</span><span class="cal-status locked">0.05 SOL</span></button>
+          <button class="cal-asset-btn locked" data-id="sui"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/20947.png" alt="SUI"/><span class="cal-name">Sui</span><span class="cal-sym">SUI</span><span class="cal-status locked">0.05 SOL</span></button>
+          <button class="cal-asset-btn locked" data-id="chainlink"><img class="cal-logo" src="https://s2.coinmarketcap.com/static/img/coins/64x64/1975.png" alt="LINK"/><span class="cal-name">Chainlink</span><span class="cal-sym">LINK</span><span class="cal-status locked">0.05 SOL</span></button>
+        </div>
+        <!-- Unlock All button on calendar page -->
+        <div id="unlock-all-bar-cal" style="display:none;margin-top:12px">
+          <button class="run-btn" id="cal-unlock-all-btn" style="width:100%;font-size:0.82rem">
+            <span>🔓 Unlock All Assets — 0.2 SOL</span><span>→</span>
+          </button>
+          <p style="font-size:0.68rem;color:var(--t3);text-align:center;margin-top:6px;font-family:var(--fb)">Save 0.35 SOL vs buying individually · One-time · Never expires</p>
+        </div>
+      </section>
+
+      <div class="loading-state" id="cal-loading" style="display:none">
+        <div class="loader-ring"></div>
+        <p class="loading-msg" id="cal-loading-msg">Loading calendar data...</p>
+      </div>
+
+      <section class="panel" id="panel-calendar" style="display:none">
+        <div class="panel-label">◈ Signal Calendar</div>
+
+        <div class="cal-header">
+          <div class="cal-title-row">
+            <span class="cal-icon-big" id="cal-title-icon">₿</span>
+            <div><div class="cal-title-name" id="cal-title-name">Bitcoin</div>
+            <div class="cal-title-sub" id="cal-title-sub">BTC — Signal Calendar</div></div>
+          </div>
+          <div class="cal-data-range" id="cal-data-range"></div>
+        </div>
+
+        <!-- View toggle: monthly / weekly -->
+        <div class="view-toggle" id="view-toggle">
+          <button class="view-btn active" data-view="monthly">Monthly View</button>
+          <button class="view-btn" data-view="weekly">Weekly View</button>
+        </div>
+
+        <div class="year-filter">
+          <span class="filter-lbl">Filter:</span>
+          <div class="year-pills" id="year-filter-pills"></div>
+        </div>
+
+        <div class="bw-strip" id="best-worst-strip"></div>
+
+        <!-- Monthly heatmap -->
+        <div id="monthly-view">
+          <div class="cal-heatmap" id="cal-heatmap"></div>
+        </div>
+
+        <!-- Weekly heatmap -->
+        <div id="weekly-view" style="display:none">
+          <p class="section-intro" style="margin-bottom:14px">Average return by week-of-year across all historical data. Hover/tap for details.</p>
+          <div class="weekly-heatmap" id="weekly-heatmap"></div>
+        </div>
+
+        <div class="month-detail-card" id="month-detail-card" style="display:none">
+          <button class="detail-close" id="month-detail-close">✕</button>
+          <div id="month-detail-inner"></div>
+        </div>
+
+        <!-- Year-by-year grid -->
+        <div class="ygrid-section">
+          <div class="section-sublabel">Year-by-Year Breakdown</div>
+          <div class="yearly-grid" id="yearly-grid"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Wallet Modal -->
+  <div class="modal-backdrop" id="modal-backdrop" style="display:none">
+    <div class="modal">
+      <button class="modal-close" id="modal-close">✕</button>
+      <div id="modal-inner"></div>
+    </div>
+  </div>
+
+  <!-- Tip jar -->
+  <div style="padding:16px 24px;max-width:1020px;margin:0 auto 0">
+    <button id="tip-btn" onclick="openTipModal()"
+       style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;background:rgba(255,140,42,0.12);border:1px solid rgba(255,140,42,0.35);border-radius:10px;cursor:pointer;transition:all 0.2s"
+       onmouseover="this.style.background='rgba(255,140,42,0.2)';this.style.borderColor='rgba(255,140,42,0.6)'"
+       onmouseout="this.style.background='rgba(255,140,42,0.12)';this.style.borderColor='rgba(255,140,42,0.35)'">
+      <span style="font-size:1rem">☕</span>
+      <span style="font-family:var(--fm);font-size:0.72rem;font-weight:600;color:rgba(255,140,42,0.85);letter-spacing:0.04em">Enjoying OmenFi? Leave a tip in SOL</span>
+    </button>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>OmenFi © 2026</span>
+      <span class="sep">·</span>
+      <span>Data via CryptoCompare</span>
+      <span class="sep">·</span>
+      <span>Historical data only · Not financial advice</span>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
