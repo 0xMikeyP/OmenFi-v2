@@ -1731,42 +1731,17 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      // Seed Vault Wallet — uses Mobile Wallet Standard (registerMwa)
-      // registerMwa registers MWA as a wallet in the wallet-standard registry
-      // We find it by name and connect through the standard wallet interface
-      if (!window.mwaGetWallets) {
-        throw new Error('Seed Vault Wallet is only available on Android. Open OmenFi in Chrome on your Seeker device.');
+      // Seed Vault Wallet via SolanaMobileWalletAdapter
+      if (!window.mwaAdapter) {
+        throw new Error('Seed Vault Wallet is only available on Android Chrome. Open OmenFi in Chrome on your Seeker.');
       }
 
-      // Find the MWA wallet from the wallet standard registry
-      const { get } = window.mwaGetWallets();
-      const wallets = get();
-      const mwaWallet = wallets.find(w =>
-        w.name === 'Mobile Wallet Adapter' ||
-        w.name?.toLowerCase().includes('mobile wallet') ||
-        w.name?.toLowerCase().includes('seed vault')
-      );
+      // connect() fires the solana-wallet:// Android intent
+      // which opens the Seed Vault Wallet app for authorization
+      await window.mwaAdapter.connect();
 
-      if (!mwaWallet) {
-        throw new Error('Seed Vault Wallet not detected. Make sure you are using Chrome on your Seeker device.');
-      }
-
-      // Connect through the standard wallet interface
-      const connectFeature = mwaWallet.features['standard:connect'];
-      if (!connectFeature) throw new Error('Wallet does not support standard connect.');
-
-      const result = await connectFeature.connect();
-      const account = result.accounts?.[0];
-      if (!account) throw new Error('No account returned from Seed Vault Wallet.');
-
-      const web3 = window.solanaWeb3;
-      const pubkey = new web3.PublicKey(account.publicKey).toBase58();
-
-      // Store wallet account for signing
-      sessionStorage.setItem('mwa_account', JSON.stringify({
-        publicKey: Array.from(account.publicKey),
-        address: pubkey,
-      }));
+      const pubkey = window.mwaAdapter.publicKey?.toBase58();
+      if (!pubkey) throw new Error('Authorization failed. Please try again.');
 
       saveWallet(pubkey);
       await onWalletConnected(pubkey, 'seedvault');
