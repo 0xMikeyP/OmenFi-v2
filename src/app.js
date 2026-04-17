@@ -1731,24 +1731,42 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      // Seed Vault Wallet — uses SolanaMobileWalletAdapter
-      // This is the correct high-level adapter for web browsers
-      // It handles the solana-wallet:// intent and WebSocket lifecycle
-      if (!window.mwaAdapter) {
-        throw new Error('Seed Vault Wallet not available. Make sure you are on an Android device with Seed Vault Wallet installed.');
+      // Seed Vault Wallet — uses Mobile Wallet Standard (registerMwa)
+      // registerMwa registers MWA as a wallet in the wallet-standard registry
+      // We find it by name and connect through the standard wallet interface
+      if (!window.mwaGetWallets) {
+        throw new Error('Seed Vault Wallet is only available on Android. Open OmenFi in Chrome on your Seeker device.');
       }
 
-      // Connect via the adapter — this fires the Android intent
-      // which launches the Seed Vault Wallet app for authorization
-      await window.mwaAdapter.connect();
+      // Find the MWA wallet from the wallet standard registry
+      const { get } = window.mwaGetWallets();
+      const wallets = get();
+      const mwaWallet = wallets.find(w =>
+        w.name === 'Mobile Wallet Adapter' ||
+        w.name?.toLowerCase().includes('mobile wallet') ||
+        w.name?.toLowerCase().includes('seed vault')
+      );
 
-      const pubkey = window.mwaAdapter.publicKey?.toString();
-      if (!pubkey) {
-        throw new Error('Authorization failed. Please try again.');
+      if (!mwaWallet) {
+        throw new Error('Seed Vault Wallet not detected. Make sure you are using Chrome on your Seeker device.');
       }
 
-      // Store adapter connection state
-      sessionStorage.setItem('mwa_connected', '1');
+      // Connect through the standard wallet interface
+      const connectFeature = mwaWallet.features['standard:connect'];
+      if (!connectFeature) throw new Error('Wallet does not support standard connect.');
+
+      const result = await connectFeature.connect();
+      const account = result.accounts?.[0];
+      if (!account) throw new Error('No account returned from Seed Vault Wallet.');
+
+      const web3 = window.solanaWeb3;
+      const pubkey = new web3.PublicKey(account.publicKey).toBase58();
+
+      // Store wallet account for signing
+      sessionStorage.setItem('mwa_account', JSON.stringify({
+        publicKey: Array.from(account.publicKey),
+        address: pubkey,
+      }));
 
       saveWallet(pubkey);
       await onWalletConnected(pubkey, 'seedvault');
@@ -2146,24 +2164,28 @@ async function restoreServerUnlocks(walletAddress) {
       let recovered = 0;
 
       for (const payment of payments) {
-        // Find the next asset not yet unlocked
-        const assetId = allAssets.find(id => !alreadyUnlocked.has(id));
-        if (!assetId) break;
-        alreadyUnlocked.add(assetId);
+        // How many assets does this payment cover?
+        // isUnlockAll = true means 0.2 SOL bundle that unlocks all 11 assets
+        const slotsToUnlock = payment.isUnlockAll ? allAssets.length : 1;
 
-        // Get a properly signed token from verify-payment using the existing tx signature
-        try {
-          const verified = await verifyPaymentOnServer(payment.signature, assetId, walletAddress);
-          if (verified.success) {
-            storeUnlockToken(assetId, verified.unlockToken);
+        for (let i = 0; i < slotsToUnlock; i++) {
+          const assetId = allAssets.find(id => !alreadyUnlocked.has(id));
+          if (!assetId) break;
+          alreadyUnlocked.add(assetId);
+
+          // Get a properly signed token from verify-payment
+          try {
+            const verified = await verifyPaymentOnServer(payment.signature, assetId, walletAddress);
+            if (verified.success) {
+              storeUnlockToken(assetId, verified.unlockToken);
+            }
+          } catch(e) {
+            console.warn('Could not re-verify recovered payment, unlocking anyway:', e);
           }
-        } catch(e) {
-          // If verify fails, still unlock — blockchain confirmed the payment
-          console.warn('Could not re-verify recovered payment, unlocking anyway:', e);
-        }
 
-        state.unlockedAssets.add(assetId);
-        recovered++;
+          state.unlockedAssets.add(assetId);
+          recovered++;
+        }
       }
 
       if (recovered > 0) {
