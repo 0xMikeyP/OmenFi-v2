@@ -11,7 +11,7 @@ export default defineConfig({
   ],
   build: {
     outDir: 'dist',
-    target: 'es2020',
+    target: 'esnext',
     commonjsOptions: {
       transformMixedEsModules: true,
     },
@@ -23,7 +23,7 @@ export default defineConfig({
       '@solana-mobile/mobile-wallet-adapter-protocol-web3js',
     ],
     esbuildOptions: {
-      target: 'es2020',
+      target: 'esnext',
     },
   },
   define: {
