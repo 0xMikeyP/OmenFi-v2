@@ -1,0 +1,13 @@
+{
+  "name": "OmenFi",
+  "short_name": "OmenFi",
+  "description": "DCA Strategy Backtester & Signal Calendar for Crypto",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0608",
+  "theme_color": "#0a0608",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
