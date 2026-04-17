@@ -38,19 +38,31 @@ exports.handler = async function(event) {
   catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON' }) }; }
 
   const { tokens } = body;
-  if (!Array.isArray(tokens)) return { statusCode: 400, headers, body: JSON.stringify({ error: 'tokens must be array' }) };
+  if (!tokens) return { statusCode: 400, headers, body: JSON.stringify({ error: 'missing tokens' }) };
 
   const validAssets = [];
 
-  for (const token of tokens.slice(0, 20)) {
+  // tokens can be either:
+  // 1. An object {assetId: token} — new format, assetId is the key
+  // 2. An array of tokens — old format, extract assetId from token data
+  const entries = Array.isArray(tokens)
+    ? tokens.map(t => [null, t])           // old format — no assetId key
+    : Object.entries(tokens).slice(0, 20); // new format — assetId is the key
+
+  for (const [assetId, token] of entries) {
     try {
       const decoded = JSON.parse(atob(token));
       const { d, h } = decoded;
       if (!d || !h) continue;
       const expected = await hmacSign(SECRET, d);
       if (!timingSafeEqual(expected, h)) continue;
-      const assetId = d.split(':')[1];
-      if (assetId && !validAssets.includes(assetId)) validAssets.push(assetId);
+
+      // Use the explicit assetId key if provided (new format)
+      // Otherwise fall back to extracting from token data (old format)
+      const resolvedId = assetId || d.split(':')[1];
+      if (resolvedId && !resolvedId.startsWith('recovery_slot') && !validAssets.includes(resolvedId)) {
+        validAssets.push(resolvedId);
+      }
     } catch { continue; }
   }
 
