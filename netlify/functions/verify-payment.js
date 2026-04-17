@@ -126,12 +126,9 @@ exports.handler = async function(event) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Sender wallet not found in transaction' }) };
     }
 
-    // Check transaction is recent (within 24 hours)
+    // Note: No time restriction — purchases are permanent and never expire
+    // Recovery use case requires verifying old transactions
     const txTime = tx.blockTime || 0;
-    const now    = Math.floor(Date.now() / 1000);
-    if (now - txTime > 86400) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Transaction too old (>24h)' }) };
-    }
 
     // Issue HMAC-signed unlock token
     const tokenData = `${walletAddress}:${assetId}:${signature}:${txTime}`;
