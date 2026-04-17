@@ -5,33 +5,17 @@ import Chart from 'chart.js/auto'
 window.solanaWeb3 = web3
 window.Chart = Chart
 
-// Mobile Wallet Adapter for web — using wallet-adapter-mobile
-// This is the confirmed working package for Android Chrome + Seed Vault
+// Mobile Wallet Adapter — use transact directly
+// The adapter class triggers a permissions.query for localhost which
+// Chrome blocks with "Local Network Access" error on Android
+// Using transact directly bypasses this check
 try {
-  const {
-    SolanaMobileWalletAdapter,
-    createDefaultAuthorizationResultCache,
-    createDefaultAddressSelector,
-    createDefaultWalletNotFoundHandler,
-  } = await import('@solana-mobile/wallet-adapter-mobile')
-
-  const adapter = new SolanaMobileWalletAdapter({
-    addressSelector: createDefaultAddressSelector(),
-    appIdentity: {
-      name: 'OmenFi',
-      uri: window.location.origin,
-      icon: `${window.location.origin}/icon-192.png`,
-    },
-    authorizationResultCache: createDefaultAuthorizationResultCache(),
-    cluster: 'mainnet-beta',
-    onWalletNotFound: createDefaultWalletNotFoundHandler(),
-  })
-
-  window.mwaAdapter = adapter
-  console.log('MWA adapter ready')
+  const { transact } = await import('@solana-mobile/mobile-wallet-adapter-protocol-web3js')
+  window.mwaTransact = transact
+  console.log('MWA transact ready')
 } catch (e) {
   console.log('MWA not available:', e.message)
-  window.mwaAdapter = null
+  window.mwaTransact = null
 }
 
 import './app.js'
