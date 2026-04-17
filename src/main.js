@@ -8,34 +8,40 @@ import Chart from 'chart.js/auto'
 window.solanaWeb3 = web3
 window.Chart = Chart
 
-// Mobile Wallet Adapter for web browsers (Android Chrome)
-// Uses SolanaMobileWalletAdapter which correctly handles the
-// solana-wallet:// intent protocol and WebSocket lifecycle
+// Register Mobile Wallet Adapter as a wallet standard
+// This is the official approach per docs.solanamobile.com/get-started/web/installation
+// Once registered, MWA appears as a wallet option on Android Chrome automatically
+// and handles the solana-wallet:// intent + WebSocket lifecycle correctly
 try {
-  const { SolanaMobileWalletAdapter, createDefaultAuthorizationResultCache, createDefaultAddressSelector } =
-    await import('@solana-mobile/wallet-adapter-mobile')
+  const {
+    registerMwa,
+    createDefaultAuthorizationCache,
+    createDefaultChainSelector,
+    createDefaultWalletNotFoundHandler,
+  } = await import('@solana-mobile/wallet-standard-mobile')
 
-  // Create the adapter instance
-  const mwaAdapter = new SolanaMobileWalletAdapter({
-    addressSelector: createDefaultAddressSelector(),
+  registerMwa({
     appIdentity: {
       name: 'OmenFi',
       uri: window.location.origin,
       icon: `${window.location.origin}/icon-192.png`,
     },
-    authorizationResultCache: createDefaultAuthorizationResultCache(),
-    chain: 'solana:mainnet',
-    onWalletNotFound: () => {
-      // Wallet not found — show helpful message instead of redirecting to store
-      console.warn('No MWA wallet found')
-    },
+    authorizationCache: createDefaultAuthorizationCache(),
+    chains: ['solana:mainnet'],
+    chainSelector: createDefaultChainSelector(),
+    onWalletNotFound: createDefaultWalletNotFoundHandler(),
   })
 
-  window.mwaAdapter = mwaAdapter
-  console.log('MWA adapter ready — Seed Vault Wallet available')
+  console.log('MWA registered — Seed Vault Wallet available on Android')
+
+  // After registering, the wallet standard exposes the MWA wallet
+  // via window.navigator.wallets — get a reference for our connect flow
+  const getWallets = (await import('@wallet-standard/app')).getWallets
+  window.mwaGetWallets = getWallets
+
 } catch (e) {
-  console.log('MWA adapter not available:', e.message)
-  window.mwaAdapter = null
+  console.log('MWA registration skipped (not Android or package unavailable):', e.message)
+  window.mwaGetWallets = null
 }
 
 // Load the main app
