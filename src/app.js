@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-14-v5.8
+   Build: 2026-04-14-v5.9
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v5.8');
+console.log('OmenFi build: 2026-04-14-v5.9');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
@@ -1755,9 +1755,25 @@ async function doConnect(walletType = 'phantom') {
         throw new Error('Authorization failed. Please try again.');
       }
 
-      // MWA returns the address as a Uint8Array — convert to base58
-      const addressBytes = authResult.accounts[0].address;
-      const pubkey = new web3.PublicKey(addressBytes).toBase58();
+      // MWA address can be Uint8Array, base64 string, or base58 string
+      // Handle all cases robustly
+      const rawAddress = authResult.accounts[0].address;
+      let pubkey;
+      if (typeof rawAddress === 'string') {
+        // Could be base64 encoded bytes or already base58
+        try {
+          // Try treating as base64 first (common MWA format)
+          const bytes = Uint8Array.from(atob(rawAddress), c => c.charCodeAt(0));
+          pubkey = new web3.PublicKey(bytes).toBase58();
+        } catch(e) {
+          // Already a base58 address string
+          pubkey = rawAddress;
+        }
+      } else {
+        // Uint8Array or Buffer
+        pubkey = new web3.PublicKey(rawAddress).toBase58();
+      }
+      if (!pubkey || pubkey.length < 32) throw new Error('Invalid public key from wallet.');
 
       // Store auth token for subsequent signing
       sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
@@ -2153,21 +2169,20 @@ async function restoreServerUnlocks(walletAddress) {
       const { payments } = await res.json();
       if (!payments?.length) return;
 
-      // Use pre-signed tokens from recovery — no second round-trip needed
-      // recover-unlocks already verified the payment on-chain and issued tokens
+      // Map payment tokens to asset IDs in order
       const allAssets = Object.keys(ASSETS).filter(id => id !== 'bitcoin');
       const alreadyUnlocked = new Set([...state.unlockedAssets]);
       let recovered = 0;
 
       for (const payment of payments) {
         const slots = payment.tokens || [];
-        for (let i = 0; i < slots.length; i++) {
+        for (const token of slots) {
+          // Find next unlocked asset slot
           const assetId = allAssets.find(id => !alreadyUnlocked.has(id));
           if (!assetId) break;
           alreadyUnlocked.add(assetId);
-
-          // Store the pre-signed recovery token
-          storeUnlockToken(assetId, slots[i]);
+          // Store token keyed by assetId — validate-tokens uses this key
+          storeUnlockToken(assetId, token);
           state.unlockedAssets.add(assetId);
           recovered++;
         }
@@ -2177,7 +2192,7 @@ async function restoreServerUnlocks(walletAddress) {
         saveUnlocked();
         refreshAssetUI();
         refreshUnlockAllBar();
-        console.log('Recovered ' + recovered + ' purchase(s) from blockchain');
+        console.log('Recovered ' + recovered + ' asset(s) from blockchain');
       }
     }
   } catch (e) {
