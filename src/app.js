@@ -1746,7 +1746,7 @@ async function doConnect(walletType = 'phantom') {
           identity: {
             name: 'OmenFi',
             uri: window.location.origin,
-            icon: window.location.origin + '/icon-192.png',
+            icon: 'icon-192.png', // must be relative URI per MWA spec
           },
         });
       });
@@ -2035,7 +2035,7 @@ async function sendSolPayment(assetId, lamports) {
           try {
             await mwaWallet.reauthorize({
               auth_token: storedAuth.token,
-              identity: { name: 'OmenFi', uri: window.location.origin, icon: '/icon-192.png' },
+              identity: { name: 'OmenFi', uri: window.location.origin, icon: 'icon-192.png' },
             });
           } catch(e) {
             // Auth token expired — user will need to reconnect
