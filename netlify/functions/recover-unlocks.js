@@ -10,7 +10,9 @@
  */
 
 const LAMPORTS_PER_SOL  = 1_000_000_000;
-const REQUIRED_LAMPORTS = Math.round(0.048 * LAMPORTS_PER_SOL); // min payment threshold (covers 0.05 SOL per asset)
+const REQUIRED_LAMPORTS    = Math.round(0.048 * LAMPORTS_PER_SOL); // min per asset (0.05 SOL with tolerance)
+const UNLOCK_ALL_LAMPORTS  = Math.round(0.19  * LAMPORTS_PER_SOL); // unlock-all bundle (0.2 SOL with tolerance)
+const PAID_ASSETS_COUNT    = 11; // number of paid assets (excludes BTC which is free)
 
 async function hmacSign(secret, data) {
   const encoder = new TextEncoder();
@@ -136,11 +138,16 @@ exports.handler = async function(event) {
         // assetId and request a properly-signed token via verify-payment
         const txTime = tx.blockTime || 0;
 
+        const receivedSol = received / LAMPORTS_PER_SOL;
+        const isUnlockAll = received >= UNLOCK_ALL_LAMPORTS;
+
         recoveredPayments.push({
           signature: sigInfo.signature,
           walletAddress,
           timestamp: txTime,
-          receivedSol: received / LAMPORTS_PER_SOL,
+          receivedSol,
+          isUnlockAll, // true if payment was the unlock-all bundle
+          assetCount: isUnlockAll ? PAID_ASSETS_COUNT : 1, // how many assets this covers
         });
 
         console.log(`Found payment: ${sigInfo.signature} — ${received / LAMPORTS_PER_SOL} SOL`);
