@@ -2398,10 +2398,7 @@ function renderSuccess(id){
   $('close-ok').addEventListener('click',closeModal);
 }
 
-// Legacy connect function (kept for compat — routes to doConnect)
-async function connect(provider){
-  await doConnect();
-}
+// Legacy connect removed — use doConnect() directly
 
 // ============================================
 // UI HELPERS
