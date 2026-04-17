@@ -1733,14 +1733,30 @@ async function doConnect(walletType = 'phantom') {
     if (walletType === 'seedvault') {
       // Seed Vault Wallet via SolanaMobileWalletAdapter
       if (!window.mwaAdapter) {
-        throw new Error('Seed Vault Wallet is only available on Android Chrome. Open OmenFi in Chrome on your Seeker.');
+        throw new Error('Seed Vault Wallet is only available in Chrome on Android. Open OmenFi in Chrome on your Seeker.');
       }
 
-      // connect() fires the solana-wallet:// Android intent
-      // which opens the Seed Vault Wallet app for authorization
-      await window.mwaAdapter.connect();
+      // SolanaMobileWalletAdapter fires a 'connect' event when authorized
+      // We wrap it in a Promise so we can await the result
+      const pubkey = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Connection timed out. Make sure Seed Vault Wallet is installed.'));
+        }, 30000);
 
-      const pubkey = window.mwaAdapter.publicKey?.toBase58();
+        window.mwaAdapter.on('connect', (publicKey) => {
+          clearTimeout(timeout);
+          resolve(publicKey?.toBase58());
+        });
+
+        window.mwaAdapter.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+
+        // Fire the intent — this opens Seed Vault Wallet app
+        window.mwaAdapter.connect().catch(reject);
+      });
+
       if (!pubkey) throw new Error('Authorization failed. Please try again.');
 
       saveWallet(pubkey);
