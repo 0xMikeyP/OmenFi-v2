@@ -128,7 +128,11 @@ document.addEventListener('DOMContentLoaded', () => {
       state.walletProvider = loadWalletProvider();
       $('wallet-btn-text').textContent = savedWallet.slice(0,4)+'...'+savedWallet.slice(-4);
       $('wallet-btn').classList.add('connected');
+      // Close modal if it's open (e.g. connect modal was showing during page reload)
+      const bd = $('modal-backdrop');
+      if (bd && bd.style.display !== 'none') closeModal();
       restoreServerUnlocks(savedWallet).catch(() => {});
+      refreshUnlockAllBar();
       const pu = sessionStorage.getItem('pu');
       if (pu) { sessionStorage.removeItem('pu'); setTimeout(() => openUnlockModal(pu), 300); }
     };
@@ -143,8 +147,10 @@ document.addEventListener('DOMContentLoaded', () => {
           if (pk) saveWallet(pk.toString());
           doRestore();
         });
-        // If we don't know which wallet, check provider state
         if (!state.walletProvider) state.walletProvider = 'phantom';
+        // If Phantom already has publicKey (already authorized this session),
+        // update savedWallet with the live key in case it changed
+        if (p?.publicKey) saveWallet(p.publicKey.toString());
         doRestore();
       } else if (isSolflareInjected()) {
         const p = window.solflare;
@@ -1725,41 +1731,24 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      // Seed Vault Wallet — uses Mobile Wallet Adapter protocol
-      // window.mwaTransact is the transact function imported from
-      // @solana-mobile/mobile-wallet-adapter-protocol-web3js in main.js
-      if (!window.mwaTransact) {
-        throw new Error('MWA not available. Please refresh and try again.');
+      // Seed Vault Wallet — uses SolanaMobileWalletAdapter
+      // This is the correct high-level adapter for web browsers
+      // It handles the solana-wallet:// intent and WebSocket lifecycle
+      if (!window.mwaAdapter) {
+        throw new Error('Seed Vault Wallet not available. Make sure you are on an Android device with Seed Vault Wallet installed.');
       }
 
-      // MWA transact opens the Seed Vault Wallet app via Android intent,
-      // establishes a secure WebSocket connection, and handles authorization
-      const authResult = await window.mwaTransact(async (mwaWallet) => {
-        const authorizationResult = await mwaWallet.authorize({
-          chain: 'solana:mainnet',
-          identity: {
-            name: 'OmenFi',
-            uri: window.location.origin,
-            icon: '/icon-192.png',
-          },
-        });
-        return authorizationResult;
-      });
+      // Connect via the adapter — this fires the Android intent
+      // which launches the Seed Vault Wallet app for authorization
+      await window.mwaAdapter.connect();
 
-      if (!authResult?.accounts?.[0]?.address) {
+      const pubkey = window.mwaAdapter.publicKey?.toString();
+      if (!pubkey) {
         throw new Error('Authorization failed. Please try again.');
       }
 
-      // Decode the base64 public key returned by MWA
-      const addressBytes = authResult.accounts[0].address;
-      const web3 = window.solanaWeb3;
-      const pubkey = new web3.PublicKey(addressBytes).toString();
-
-      // Store the auth token for future signing sessions
-      sessionStorage.setItem('mwa_auth_token', JSON.stringify({
-        token: authResult.auth_token,
-        address: pubkey,
-      }));
+      // Store adapter connection state
+      sessionStorage.setItem('mwa_connected', '1');
 
       saveWallet(pubkey);
       await onWalletConnected(pubkey, 'seedvault');
