@@ -8,9 +8,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@solana-mobile/wallet-standard-mobile": "^1.1.0",
+    "@solana-mobile/wallet-adapter-mobile": "^2.1.3",
     "@solana-mobile/mobile-wallet-adapter-protocol": "^2.2.5",
-    "@solana-mobile/mobile-wallet-adapter-protocol-web3js": "^2.2.2",
+    "@solana-mobile/mobile-wallet-adapter-protocol-web3js": "^2.2.5",
     "@solana/web3.js": "^1.98.0",
     "@wallet-standard/app": "^1.1.0",
     "chart.js": "^4.4.0"
