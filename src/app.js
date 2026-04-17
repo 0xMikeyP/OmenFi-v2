@@ -1731,33 +1731,36 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      // Seed Vault Wallet via SolanaMobileWalletAdapter
-      if (!window.mwaAdapter) {
-        throw new Error('Seed Vault Wallet is only available in Chrome on Android. Open OmenFi in Chrome on your Seeker.');
+      // Seed Vault Wallet — use transact() directly
+      // This fires the solana-wallet:// Android intent without triggering
+      // Chrome's Local Network Access permission check
+      if (!window.mwaTransact) {
+        throw new Error('Seed Vault Wallet is only available in Chrome on Android.');
       }
 
-      // SolanaMobileWalletAdapter fires a 'connect' event when authorized
-      // We wrap it in a Promise so we can await the result
-      const pubkey = await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Connection timed out. Make sure Seed Vault Wallet is installed.'));
-        }, 30000);
+      const web3 = window.solanaWeb3;
 
-        window.mwaAdapter.on('connect', (publicKey) => {
-          clearTimeout(timeout);
-          resolve(publicKey?.toBase58());
+      const authResult = await window.mwaTransact(async (wallet) => {
+        return await wallet.authorize({
+          chain: 'solana:mainnet',
+          identity: {
+            name: 'OmenFi',
+            uri: window.location.origin,
+            icon: window.location.origin + '/icon-192.png',
+          },
         });
-
-        window.mwaAdapter.on('error', (err) => {
-          clearTimeout(timeout);
-          reject(err);
-        });
-
-        // Fire the intent — this opens Seed Vault Wallet app
-        window.mwaAdapter.connect().catch(reject);
       });
 
-      if (!pubkey) throw new Error('Authorization failed. Please try again.');
+      if (!authResult?.accounts?.[0]?.address) {
+        throw new Error('Authorization failed. Please try again.');
+      }
+
+      // MWA returns the address as a Uint8Array — convert to base58
+      const addressBytes = authResult.accounts[0].address;
+      const pubkey = new web3.PublicKey(addressBytes).toBase58();
+
+      // Store auth token for subsequent signing
+      sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
 
       saveWallet(pubkey);
       await onWalletConnected(pubkey, 'seedvault');
@@ -2127,10 +2130,11 @@ async function restoreServerUnlocks(walletAddress) {
 
     if (tokens.length) {
       // Has stored tokens — validate them
+      // Send as {assetId: token} object so server knows which asset each token is for
       const res = await fetch('/.netlify/functions/validate-tokens', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tokens }),
+        body: JSON.stringify({ tokens: stored }), // stored is already {assetId: token}
       });
       if (!res.ok) return;
       const { validAssets } = await res.json();
@@ -2149,31 +2153,21 @@ async function restoreServerUnlocks(walletAddress) {
       const { payments } = await res.json();
       if (!payments?.length) return;
 
-      // Re-issue properly signed tokens for each recovered payment
+      // Use pre-signed tokens from recovery — no second round-trip needed
+      // recover-unlocks already verified the payment on-chain and issued tokens
       const allAssets = Object.keys(ASSETS).filter(id => id !== 'bitcoin');
       const alreadyUnlocked = new Set([...state.unlockedAssets]);
       let recovered = 0;
 
       for (const payment of payments) {
-        // How many assets does this payment cover?
-        // isUnlockAll = true means 0.2 SOL bundle that unlocks all 11 assets
-        const slotsToUnlock = payment.isUnlockAll ? allAssets.length : 1;
-
-        for (let i = 0; i < slotsToUnlock; i++) {
+        const slots = payment.tokens || [];
+        for (let i = 0; i < slots.length; i++) {
           const assetId = allAssets.find(id => !alreadyUnlocked.has(id));
           if (!assetId) break;
           alreadyUnlocked.add(assetId);
 
-          // Get a properly signed token from verify-payment
-          try {
-            const verified = await verifyPaymentOnServer(payment.signature, assetId, walletAddress);
-            if (verified.success) {
-              storeUnlockToken(assetId, verified.unlockToken);
-            }
-          } catch(e) {
-            console.warn('Could not re-verify recovered payment, unlocking anyway:', e);
-          }
-
+          // Store the pre-signed recovery token
+          storeUnlockToken(assetId, slots[i]);
           state.unlockedAssets.add(assetId);
           recovered++;
         }
