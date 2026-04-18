@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v7.3
+   Build: 2026-04-17-v7.4
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v7.3');
+console.log('OmenFi build: 2026-04-14-v7.4');
 'use strict';
 
 // ============================================
@@ -2110,29 +2110,30 @@ async function sendSolPayment(assetId, lamports) {
       const storedAuth = JSON.parse(sessionStorage.getItem('mwa_auth_token') || '{}');
 
       const result = await window.mwaTransact(async (mwaWallet) => {
-        // Re-authorize if needed using stored auth token
-        if (storedAuth.token) {
-          try {
-            await mwaWallet.reauthorize({
-              auth_token: storedAuth.token,
-              identity: { name: 'OmenFi', uri: window.location.origin, icon: 'icon-192.png' },
-            });
-          } catch(e) {
-            // Auth token expired — user will need to reconnect
-            console.warn('Reauth failed, proceeding without token:', e);
-          }
-        }
+        // Always re-authorize fresh — don't rely on stored auth token
+        // MWA session expires quickly and causes JWT errors if stale
+        console.log('Authorizing with Seed Vault...');
+        const authResult = await mwaWallet.authorize({
+          chain: 'solana:mainnet',
+          identity: {
+            name: 'OmenFi',
+            uri: window.location.origin,
+            icon: 'icon-192.png',
+          },
+        });
+        console.log('Auth OK, account:', authResult?.accounts?.[0]?.address ? 'present' : 'missing');
 
-        // Serialize the transaction and send to Seed Vault for signing + broadcast
-        console.log('Serializing transaction, memo:', memoText, 'memoData type:', memoData?.constructor?.name);
+        // Serialize the transaction
+        console.log('Serializing tx, memo:', memoText);
         const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
-        console.log('Serialized OK, length:', serialized.length);
+        console.log('Serialized OK, bytes:', serialized.length);
+
         const results = await mwaWallet.signAndSendTransactions({
           transactions: [serialized],
-          options: { minContextSlot: 0 },
         });
+        console.log('signAndSendTransactions result:', JSON.stringify(results)?.slice(0, 100));
         const sig = results.signatures[0];
-        console.log('MWA sig type:', typeof sig, sig instanceof Uint8Array ? 'Uint8Array' : '', 'value:', JSON.stringify(sig)?.slice(0,50));
+        console.log('Raw sig type:', typeof sig, sig?.constructor?.name, JSON.stringify(sig)?.slice(0,60));
         return sig;
       });
 
