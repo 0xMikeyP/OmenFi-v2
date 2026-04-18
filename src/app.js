@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v7.0
+   Build: 2026-04-17-v7.1
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v7.0');
+console.log('OmenFi build: 2026-04-14-v7.1');
 'use strict';
 
 // ============================================
@@ -1932,7 +1932,7 @@ async function doPayment(id) {
     errDiv.style.cssText = 'color:var(--red);font-family:var(--fm);font-size:.78rem;text-align:center;margin-top:8px;padding:8px;background:rgba(255,58,92,.08);border-radius:6px;border:1px solid rgba(255,58,92,.2)';
     errDiv.textContent = msg;
     $('modal-inner').appendChild(errDiv);
-    console.error('Payment error:', err);
+    console.error('Payment error:', err, 'msg:', err?.message, 'full:', JSON.stringify(err));
   }
 }
 
@@ -2167,10 +2167,14 @@ async function sendSolPayment(assetId, lamports) {
       signature = result.signature || result;
     }
   } catch (err) {
+    // Log the full error object so we can see what MWA actually returns
+    console.error('sendSolPayment raw error:', JSON.stringify(err), 'message:', err?.message, 'code:', err?.code, 'type:', typeof err);
     if (err.code === 4001 || err.message?.includes('User rejected') || err.message?.includes('cancelled')) {
       throw new Error('Transaction cancelled.');
     }
-    throw err;
+    // Convert empty objects or non-Error throws to readable messages
+    const msg = err?.message || err?.errorMessage || err?.error || JSON.stringify(err);
+    throw new Error('Payment failed: ' + (msg || 'Unknown error from wallet'));
   }
 
   if (!signature) throw new Error('No signature returned from wallet.');
