@@ -32,9 +32,14 @@ async function getTransaction(signature, rpcUrl) {
     }],
   };
 
-  // Try primary RPC first, fall back to public if it fails
-  const urls = [rpcUrl, 'https://api.mainnet-beta.solana.com'].filter(Boolean);
+  // Try multiple public RPCs for maximum reliability
+  const urls = [
+    rpcUrl,
+    'https://api.mainnet-beta.solana.com',
+    'https://solana-mainnet.rpc.extrnode.com',
+  ];
 
+  let lastError = '';
   for (const url of urls) {
     try {
       const res = await fetch(url, {
@@ -43,34 +48,25 @@ async function getTransaction(signature, rpcUrl) {
         body: JSON.stringify(payload),
       });
 
-      // Check content type before parsing — Helius returns JWT on auth errors
-      const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
-        console.warn(`RPC at ${url} returned non-JSON (${res.status}) — trying fallback`);
-        continue;
-      }
-
       const text = await res.text();
 
-      // Detect JWT response (starts with eyJ) — means auth error
-      if (text.startsWith('eyJ')) {
-        console.warn(`RPC at ${url} returned JWT (auth error) — trying fallback`);
-        continue;
-      }
+      // Skip JWT responses (Helius auth errors)
+      if (text.startsWith('eyJ')) { lastError = 'Auth error'; continue; }
+
+      // Skip non-JSON
+      if (!text.startsWith('{')) { lastError = `Non-JSON from ${url}`; continue; }
 
       const json = JSON.parse(text);
-      if (json.error) {
-        console.warn(`RPC error from ${url}: ${json.error.message}`);
-        continue;
-      }
+      if (json.error) { lastError = json.error.message; continue; }
+
       return json.result;
     } catch(e) {
-      console.warn(`RPC fetch failed for ${url}: ${e.message}`);
+      lastError = e.message;
       continue;
     }
   }
 
-  throw new Error('Unable to fetch transaction from any RPC endpoint. Please try again.');
+  throw new Error(`Transaction verification failed: ${lastError}. Please try again.`);
 }
 
 // Robustly extract a string address from whatever the RPC returns
@@ -107,7 +103,9 @@ exports.handler = async function(event) {
 
   const TREASURY = process.env.TREASURY_WALLET;
   const SECRET   = process.env.SECRET_KEY;
-  const RPC_URL  = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+  // Use multiple public RPCs for reliability — no API key needed for getTransaction
+  // Helius free tier rate limits this call so we bypass it entirely here
+  const RPC_URL = 'https://api.mainnet-beta.solana.com';
 
   if (!TREASURY || !SECRET) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error' }) };
