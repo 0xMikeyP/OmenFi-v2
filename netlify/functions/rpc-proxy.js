@@ -54,10 +54,33 @@ exports.handler = async function(event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(safePayload),
     });
-    const data = await res.json();
-    return { statusCode: 200, headers, body: JSON.stringify(data) };
+
+    const text = await res.text();
+    console.log('Helius response status:', res.status, 'first 80 chars:', text.slice(0, 80));
+
+    // Detect JWT response — Helius returns this when API key is invalid/rate limited
+    if (text.startsWith('eyJ')) {
+      console.error('Helius returned JWT — falling back to public RPC');
+      // Fall back to public Solana RPC
+      const fallback = await fetch('https://api.mainnet-beta.solana.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(safePayload),
+      });
+      const fallbackText = await fallback.text();
+      console.log('Public RPC response:', fallbackText.slice(0, 80));
+      return { statusCode: 200, headers, body: fallbackText };
+    }
+
+    // Ensure it's valid JSON before returning
+    if (!text.startsWith('{') && !text.startsWith('[')) {
+      console.error('Non-JSON from Helius:', text.slice(0, 100));
+      return { statusCode: 502, headers, body: JSON.stringify({ error: 'Invalid RPC response' }) };
+    }
+
+    return { statusCode: 200, headers, body: text };
   } catch (err) {
     console.error('RPC proxy error:', err.message);
-    return { statusCode: 502, headers, body: JSON.stringify({ error: 'RPC request failed' }) };
+    return { statusCode: 502, headers, body: JSON.stringify({ error: 'RPC request failed: ' + err.message }) };
   }
 };
