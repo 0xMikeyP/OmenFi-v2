@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v6.6
+   Build: 2026-04-17-v6.7
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v6.6');
+console.log('OmenFi build: 2026-04-14-v6.7');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
@@ -2146,12 +2146,22 @@ async function verifyPaymentOnServer(signature, assetId, walletAddress) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ signature, assetId, walletAddress }),
   });
-  if (!res.ok) {
+
+  // Always parse as text first to catch non-JSON responses
+  const text = await res.text();
+
+  // Detect JWT or non-JSON error
+  if (text.startsWith('eyJ') || !text.startsWith('{')) {
     if (res.status === 429) throw new Error('Too many requests — please wait a moment and try again.');
-    const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) throw new Error('Server error — please try again in a moment.');
+    throw new Error(`Server error (${res.status}) — please try again.`);
   }
-  return res.json();
+
+  const data = JSON.parse(text);
+
+  // Check for error in response body
+  if (data.error) throw new Error(data.error);
+
+  return data;
 }
 
 // Store HMAC-signed unlock token in localStorage
