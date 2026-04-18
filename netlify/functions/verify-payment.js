@@ -22,22 +22,55 @@ async function hmacSign(secret, data) {
 }
 
 async function getTransaction(signature, rpcUrl) {
-  const res = await fetch(rpcUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0', id: 1,
-      method: 'getTransaction',
-      params: [signature, {
-        encoding: 'jsonParsed',
-        commitment: 'confirmed',
-        maxSupportedTransactionVersion: 0,
-      }],
-    }),
-  });
-  const json = await res.json();
-  if (json.error) throw new Error(`RPC error: ${json.error.message}`);
-  return json.result;
+  const payload = {
+    jsonrpc: '2.0', id: 1,
+    method: 'getTransaction',
+    params: [signature, {
+      encoding: 'jsonParsed',
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0,
+    }],
+  };
+
+  // Try primary RPC first, fall back to public if it fails
+  const urls = [rpcUrl, 'https://api.mainnet-beta.solana.com'].filter(Boolean);
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      // Check content type before parsing — Helius returns JWT on auth errors
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        console.warn(`RPC at ${url} returned non-JSON (${res.status}) — trying fallback`);
+        continue;
+      }
+
+      const text = await res.text();
+
+      // Detect JWT response (starts with eyJ) — means auth error
+      if (text.startsWith('eyJ')) {
+        console.warn(`RPC at ${url} returned JWT (auth error) — trying fallback`);
+        continue;
+      }
+
+      const json = JSON.parse(text);
+      if (json.error) {
+        console.warn(`RPC error from ${url}: ${json.error.message}`);
+        continue;
+      }
+      return json.result;
+    } catch(e) {
+      console.warn(`RPC fetch failed for ${url}: ${e.message}`);
+      continue;
+    }
+  }
+
+  throw new Error('Unable to fetch transaction from any RPC endpoint. Please try again.');
 }
 
 // Robustly extract a string address from whatever the RPC returns
