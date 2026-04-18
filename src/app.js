@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v7.2
+   Build: 2026-04-17-v7.3
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v7.2');
+console.log('OmenFi build: 2026-04-14-v7.3');
 'use strict';
 
 // ============================================
@@ -2033,7 +2033,10 @@ async function sendSolPayment(assetId, lamports) {
     if (!contentType.includes('application/json')) {
       throw new Error('Payment service unavailable — please try again in a moment.');
     }
-    const json = await res.json();
+    const rawText = await res.text();
+    console.log('proxyFetch response:', rawText.slice(0, 100));
+    if (rawText.startsWith('eyJ')) throw new Error('RPC auth error — invalid API key response');
+    const json = JSON.parse(rawText);
     if (json.error) throw new Error(`RPC error: ${json.error.message}`);
     return json.result;
   };
