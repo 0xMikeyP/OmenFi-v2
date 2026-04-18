@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-14-v6.4
+   Build: 2026-04-14-v6.5
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v6.4');
+console.log('OmenFi build: 2026-04-14-v6.5');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
@@ -2080,18 +2080,36 @@ async function sendSolPayment(assetId, lamports) {
         return results.signatures[0];
       });
 
-      // MWA returns base64 encoded signature bytes — convert to base58 string
-      // Use a simple base58 encoder since web3.bs58 isn't always exported
-      const sigBytes = Uint8Array.from(atob(result), c => c.charCodeAt(0));
+      // MWA signAndSendTransactions returns signatures as Uint8Array
+      // Convert Uint8Array directly to base58 string
       const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-      let num = BigInt('0x' + Array.from(sigBytes).map(b => b.toString(16).padStart(2,'0')).join(''));
-      let encoded = '';
-      while (num > 0n) {
-        encoded = BASE58_ALPHABET[Number(num % 58n)] + encoded;
-        num = num / 58n;
+      function toBase58(bytes) {
+        let num = BigInt('0x' + Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join(''));
+        let encoded = '';
+        while (num > 0n) { encoded = BASE58_ALPHABET[Number(num % 58n)] + encoded; num = num / 58n; }
+        for (const byte of bytes) { if (byte === 0) encoded = '1' + encoded; else break; }
+        return encoded;
       }
-      for (const byte of sigBytes) { if (byte === 0) encoded = '1' + encoded; else break; }
-      signature = encoded;
+
+      // result can be Uint8Array, base64 string, or already base58
+      let sigBytes;
+      if (result instanceof Uint8Array) {
+        sigBytes = result;
+      } else if (typeof result === 'string') {
+        // Check if it looks like base58 already (all base58 chars, ~88 chars)
+        if (/^[1-9A-HJ-NP-Za-km-z]{80,100}$/.test(result)) {
+          signature = result; // already base58
+          sigBytes = null;
+        } else {
+          // Try base64 decode
+          try { sigBytes = Uint8Array.from(atob(result), c => c.charCodeAt(0)); }
+          catch(e) { signature = result; sigBytes = null; } // use as-is
+        }
+      } else if (result && typeof result === 'object') {
+        sigBytes = new Uint8Array(Object.values(result));
+      }
+
+      if (sigBytes) signature = toBase58(sigBytes);
 
     } else {
       // Phantom — use existing signAndSendTransaction
