@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v7.1
+   Build: 2026-04-17-v7.2
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v7.1');
+console.log('OmenFi build: 2026-04-14-v7.2');
 'use strict';
 
 // ============================================
@@ -2085,10 +2085,12 @@ async function sendSolPayment(assetId, lamports) {
   // Recovery reads this memo to know exactly which asset was purchased
   const MEMO_PROGRAM_ID = new web3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
   const memoText = 'omenfi:' + assetId;
+  // Use TextEncoder instead of Buffer.from — pure browser API, no polyfill needed
+  const memoData = new TextEncoder().encode(memoText);
   const memoInstruction = new web3.TransactionInstruction({
     keys: [{ pubkey: fromPubkey, isSigner: true, isWritable: false }],
     programId: MEMO_PROGRAM_ID,
-    data: Buffer.from(memoText, 'utf8'),
+    data: memoData,
   });
 
   const transaction = new web3.Transaction({
@@ -2119,7 +2121,9 @@ async function sendSolPayment(assetId, lamports) {
         }
 
         // Serialize the transaction and send to Seed Vault for signing + broadcast
+        console.log('Serializing transaction, memo:', memoText, 'memoData type:', memoData?.constructor?.name);
         const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
+        console.log('Serialized OK, length:', serialized.length);
         const results = await mwaWallet.signAndSendTransactions({
           transactions: [serialized],
           options: { minContextSlot: 0 },
