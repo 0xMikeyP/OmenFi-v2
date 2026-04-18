@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v6.8
+   Build: 2026-04-17-v6.9
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v6.8');
+console.log('OmenFi build: 2026-04-14-v6.9');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
@@ -2077,9 +2077,12 @@ async function sendSolPayment(assetId, lamports) {
           transactions: [serialized],
           options: { minContextSlot: 0 },
         });
-        return results.signatures[0];
+        const sig = results.signatures[0];
+        console.log('MWA sig type:', typeof sig, sig instanceof Uint8Array ? 'Uint8Array' : '', 'value:', JSON.stringify(sig)?.slice(0,50));
+        return sig;
       });
 
+      console.log('MWA result type:', typeof result, result instanceof Uint8Array ? 'Uint8Array' : Array.isArray(result) ? 'Array' : '', JSON.stringify(result)?.slice(0,80));
       // MWA signAndSendTransactions returns signatures as Uint8Array
       // Convert Uint8Array directly to base58 string
       const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -2124,7 +2127,7 @@ async function sendSolPayment(assetId, lamports) {
   }
 
   if (!signature) throw new Error('No signature returned from wallet.');
-  console.log('Transaction sent:', signature);
+  console.log('Final signature:', signature, 'length:', signature?.length, 'valid base58:', /^[1-9A-HJ-NP-Za-km-z]{80,100}$/.test(signature || ''));
 
   let confirmed = false;
   for (let i = 0; i < 30; i++) {
