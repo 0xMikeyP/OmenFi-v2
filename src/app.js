@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-14-v6.0
+   Build: 2026-04-14-v6.4
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v6.0');
+console.log('OmenFi build: 2026-04-14-v6.4');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
@@ -2033,11 +2033,23 @@ async function sendSolPayment(assetId, lamports) {
     data: instrData,
   });
 
+  // Memo instruction — permanent on-chain receipt for this purchase
+  // Format: omenfi:<assetId>  e.g. omenfi:ethereum, omenfi:all, omenfi:tip
+  // Recovery reads this memo to know exactly which asset was purchased
+  const MEMO_PROGRAM_ID = new web3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+  const memoText = 'omenfi:' + assetId;
+  const memoInstruction = new web3.TransactionInstruction({
+    keys: [{ pubkey: fromPubkey, isSigner: true, isWritable: false }],
+    programId: MEMO_PROGRAM_ID,
+    data: Buffer.from(memoText, 'utf8'),
+  });
+
   const transaction = new web3.Transaction({
     recentBlockhash: blockhash,
     feePayer: fromPubkey,
   });
   transaction.add(instruction);
+  transaction.add(memoInstruction);
 
   let signature;
   try {
@@ -2146,45 +2158,54 @@ async function restoreServerUnlocks(walletAddress) {
 
     if (tokens.length) {
       // Has stored tokens — validate them
-      // Send as {assetId: token} object so server knows which asset each token is for
+      console.log('Validating', tokens.length, 'stored tokens for', Object.keys(stored).join(', '));
       const res = await fetch('/.netlify/functions/validate-tokens', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tokens: stored }), // stored is already {assetId: token}
+        body: JSON.stringify({ tokens: stored }),
       });
-      if (!res.ok) return;
-      const { validAssets } = await res.json();
-      validAssets.forEach(id => state.unlockedAssets.add(id));
+      if (!res.ok) {
+        console.warn('validate-tokens failed:', res.status);
+        return;
+      }
+      const data = await res.json();
+      console.log('Valid assets from server:', data.validAssets);
+      (data.validAssets || []).forEach(id => state.unlockedAssets.add(id));
       refreshAssetUI();
       refreshUnlockAllBar();
     } else {
-      // No stored tokens — scan blockchain for past payments (recovery path)
-      // This handles: new device, cleared data, first connect on new browser
+      // No stored tokens — scan blockchain
+      console.log('No tokens stored — scanning blockchain for', walletAddress);
       const res = await fetch('/.netlify/functions/recover-unlocks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress }),
       });
-      if (!res.ok) return;
-      const { payments } = await res.json();
-      if (!payments?.length) return;
+      if (!res.ok) {
+        console.warn('recover-unlocks failed:', res.status, await res.text());
+        return;
+      }
+      const data = await res.json();
+      console.log('Recovery response:', JSON.stringify(data).slice(0, 200));
+      const payments = data.payments || [];
+      if (!payments.length) {
+        console.log('No payments found on blockchain for this wallet');
+        return;
+      }
 
-      // Map payment tokens to asset IDs in order
-      const allAssets = Object.keys(ASSETS).filter(id => id !== 'bitcoin');
-      const alreadyUnlocked = new Set([...state.unlockedAssets]);
       let recovered = 0;
 
+      // New format: each payment has tokensByAsset = {ethereum: token, ripple: token, ...}
+      // This maps directly from the memo on each transaction
       for (const payment of payments) {
-        const slots = payment.tokens || [];
-        for (const token of slots) {
-          // Find next unlocked asset slot
-          const assetId = allAssets.find(id => !alreadyUnlocked.has(id));
-          if (!assetId) break;
-          alreadyUnlocked.add(assetId);
-          // Store token keyed by assetId — validate-tokens uses this key
+        const tokensByAsset = payment.tokensByAsset || {};
+        console.log('Recovering assets:', Object.keys(tokensByAsset).join(', '));
+        for (const [assetId, token] of Object.entries(tokensByAsset)) {
+          if (state.unlockedAssets.has(assetId)) continue; // already unlocked
           storeUnlockToken(assetId, token);
           state.unlockedAssets.add(assetId);
           recovered++;
+          console.log('Recovered:', assetId);
         }
       }
 
@@ -2192,7 +2213,9 @@ async function restoreServerUnlocks(walletAddress) {
         saveUnlocked();
         refreshAssetUI();
         refreshUnlockAllBar();
-        console.log('Recovered ' + recovered + ' asset(s) from blockchain');
+        console.log('Total recovered:', recovered, 'asset(s)');
+      } else {
+        console.warn('No recoverable assets found — no OmenFi memo transactions detected');
       }
     }
   } catch (e) {
