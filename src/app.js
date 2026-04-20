@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v7.5
+   Build: 2026-04-17-v7.6
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v7.5');
+console.log('OmenFi build: 2026-04-14-v7.6');
 'use strict';
 
 // ============================================
@@ -2041,14 +2041,13 @@ async function sendSolPayment(assetId, lamports) {
     return json.result;
   };
 
-  const connection = new web3.Connection('https://api.mainnet-beta.solana.com', 'confirmed');
-
   const blockhashResult = await proxyFetch('getLatestBlockhash', [{ commitment: 'finalized' }]);
-  const blockhash = blockhashResult.value.blockhash;
-  const lastValidBlockHeight = blockhashResult.value.lastValidBlockHeight;
+  console.log('blockhashResult:', JSON.stringify(blockhashResult));
+  const blockhash = blockhashResult?.value?.blockhash;
+  const lastValidBlockHeight = blockhashResult?.value?.lastValidBlockHeight;
+  if (!blockhash || blockhash.length < 32) throw new Error('Invalid blockhash received: ' + JSON.stringify(blockhash));
+  console.log('Blockhash OK:', blockhash.slice(0,20) + '...');
 
-  // Manually build a minimal SOL transfer transaction as raw bytes
-  // This completely bypasses web3.js SystemProgram.transfer and its buffer-layout dependency
   const fromPubkey = new web3.PublicKey(state.wallet);
   const toPubkey   = new web3.PublicKey(TREASURY_WALLET);
   const lamportsInt = Math.round(Number(lamports));
