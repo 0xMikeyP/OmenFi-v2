@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v8.8
+   Build: 2026-04-17-v8.9
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v8.8');
+console.log('OmenFi build: 2026-04-14-v8.9');
 'use strict';
 
 // ============================================
@@ -609,23 +609,28 @@ function runDCA(daily, amount, frequency, startDate, endDate, skipMonths=[], boo
   const seen=new Set();
   const uniqueBuys=buys.filter(d=>{ if(seen.has(d)) return false; seen.add(d); return true; });
 
-  // Calculate normalized per-buy amount so total invested = same as standard DCA
-  // This enforces the core value proposition: same capital, better timing
-  // Skipped buys have their capital redistributed into boost months proportionally
-  let normalizedAmount = amount;
+  // Budget redistribution — same total capital, optimized timing
+  // When months are skipped, that capital is spread evenly across boost months
+  // When no boost months exist, skipped capital is spread across all active months
+  // This enforces: same money in, pure timing advantage
+  let perBuyAmount = amount; // default: no change
+
   if (skipMonths.length > 0 || boostMonths.length > 0) {
-    // Count standard buys vs optimized buys weighted
-    let stdWeight = 0, optWeight = 0;
+    // Count skipped buys and active buys in the schedule
+    let skippedBuys = 0, activeBuys = 0, boostBuys = 0;
     for (const d of uniqueBuys) {
       const month = parseInt(d.split('-')[1], 10) - 1;
-      if (!skipMonths.includes(month)) {
-        stdWeight++;
-        optWeight += boostMonths.includes(month) ? boostMult : 1;
-      }
+      if (skipMonths.includes(month)) { skippedBuys++; }
+      else if (boostMonths.includes(month)) { boostBuys++; activeBuys++; }
+      else { activeBuys++; }
     }
-    // Scale amount so total capital deployed stays equal
-    if (optWeight > 0 && stdWeight > 0) {
-      normalizedAmount = amount * (stdWeight / optWeight);
+
+    if (activeBuys > 0) {
+      // Total standard capital over the period
+      const totalCapital = (skippedBuys + activeBuys) * amount;
+      // Distribute: boost months get boostMult share, normal months get 1 share
+      const totalShares = (boostBuys * boostMult) + (activeBuys - boostBuys);
+      perBuyAmount = totalCapital / totalShares;
     }
   }
 
@@ -636,7 +641,7 @@ function runDCA(daily, amount, frequency, startDate, endDate, skipMonths=[], boo
     const price=priceMap.get(d); if(!price||price<=0) continue;
     const month=parseInt(d.split('-')[1],10)-1;
     if(skipMonths.includes(month)) continue;
-    const amt = boostMonths.includes(month) ? normalizedAmount * boostMult : normalizedAmount;
+    const amt = boostMonths.includes(month) ? perBuyAmount * boostMult : perBuyAmount;
     coins+=amt/price; invested+=amt; count++;
     const val=coins*price;
     if(val>peak) peak=val;
