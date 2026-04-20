@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v8.0
+   Build: 2026-04-17-v8.1
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v8.0');
+console.log('OmenFi build: 2026-04-14-v8.1');
 'use strict';
 
 // ============================================
@@ -319,6 +319,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('modal-close').addEventListener('click', closeModal);
   $('modal-backdrop').addEventListener('click', e => { if(e.target===$('modal-backdrop')) closeModal(); });
+  // Tip button — inline onclick doesn't work in Vite modules
+  const tipBtn = $('tip-btn');
+  if (tipBtn) tipBtn.addEventListener('click', openTipModal);
 
   refreshAssetUI();
 });
