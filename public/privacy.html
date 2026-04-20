@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — OmenFi</title>
+  <style>
+    :root {
+      --bg: #0d0d0f;
+      --surface: #16161a;
+      --border: rgba(255,255,255,0.08);
+      --text: #e8e8f0;
+      --muted: #8888a0;
+      --orange: #ff8c2a;
+      --fm: 'SF Mono', 'Fira Code', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+      padding: 0 16px 60px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 0 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 36px;
+    }
+    .logo {
+      font-family: var(--fm);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--orange);
+      letter-spacing: 0.08em;
+    }
+    .back {
+      margin-left: auto;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-family: var(--fm);
+      transition: color 0.2s;
+    }
+    .back:hover { color: var(--orange); }
+    .container { max-width: 720px; margin: 0 auto; }
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    .updated {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-family: var(--fm);
+      margin-bottom: 36px;
+    }
+    h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--orange);
+      font-family: var(--fm);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin: 32px 0 10px;
+    }
+    p { color: #c8c8d8; margin-bottom: 14px; }
+    ul { color: #c8c8d8; padding-left: 20px; margin-bottom: 14px; }
+    li { margin-bottom: 6px; }
+    a { color: var(--orange); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 36px 0;
+    }
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 48px;
+      font-family: var(--fm);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span class="logo">OMENFI</span>
+      <a href="/" class="back">← Back to App</a>
+    </div>
+
+    <h1>Privacy Policy</h1>
+    <div class="updated">Last updated: April 2026</div>
+
+    <p>OmenFi ("we", "our", or "the app") is a decentralized crypto DCA strategy tool that operates on the Solana blockchain. This Privacy Policy explains what information we collect, how we use it, and your rights regarding that information.</p>
+
+    <h2>1. Information We Collect</h2>
+    <p>OmenFi collects minimal information necessary to provide the service:</p>
+    <ul>
+      <li><strong>Wallet Address:</strong> Your Solana public wallet address, used solely to verify on-chain payments and restore your purchased assets. This is a public blockchain address — it is not personally identifiable information.</li>
+      <li><strong>On-Chain Transaction Data:</strong> Payment transactions you initiate are recorded permanently on the Solana blockchain. This is inherent to blockchain technology and is publicly visible. We read this data to verify purchases and enable lifetime access recovery.</li>
+      <li><strong>Local Storage:</strong> We store unlock tokens and your wallet address locally in your browser's localStorage to persist your session. This data never leaves your device except when validated against our server.</li>
+    </ul>
+
+    <p>We do <strong>not</strong> collect:</p>
+    <ul>
+      <li>Your name, email address, or any personal contact information</li>
+      <li>IP addresses or device identifiers for tracking purposes</li>
+      <li>Private keys, seed phrases, or any sensitive wallet credentials</li>
+      <li>Browsing history or behavioral tracking data</li>
+      <li>Any information beyond what is needed to verify your blockchain payments</li>
+    </ul>
+
+    <h2>2. How We Use Information</h2>
+    <p>Your wallet address and transaction data are used exclusively to:</p>
+    <ul>
+      <li>Verify that a payment was made to unlock a specific asset</li>
+      <li>Issue cryptographically signed unlock tokens stored in your browser</li>
+      <li>Recover your purchases if you connect from a new device or clear your browser data</li>
+    </ul>
+    <p>We do not use your information for advertising, analytics, profiling, or any purpose beyond providing the OmenFi service.</p>
+
+    <h2>3. Blockchain Data</h2>
+    <p>Transactions made through OmenFi are recorded on the Solana blockchain, which is a public, immutable ledger. Transaction data including your wallet address, payment amounts, and memo fields (which identify purchased assets) are permanently visible on-chain. This is a fundamental property of blockchain technology and is not within our control. By using OmenFi, you acknowledge that your purchase transactions are publicly visible on the Solana blockchain.</p>
+
+    <h2>4. Data Storage and Security</h2>
+    <p>OmenFi does not operate a user database. We do not store your wallet address or payment history on our servers beyond the momentary processing required to verify a transaction. Unlock tokens are HMAC-signed cryptographic tokens stored only in your browser's localStorage.</p>
+    <p>Our serverless functions (hosted on Netlify) process payment verifications ephemerally — no user data is persisted after a request is complete.</p>
+
+    <h2>5. Third-Party Services</h2>
+    <p>OmenFi uses the following third-party services:</p>
+    <ul>
+      <li><strong>Solana Blockchain:</strong> Public blockchain network for transaction processing and verification.</li>
+      <li><strong>Helius RPC:</strong> Solana RPC provider used to query blockchain data. Helius may log RPC requests per their own privacy policy.</li>
+      <li><strong>CryptoCompare API:</strong> Used to fetch historical price data for backtesting. No personal data is sent to CryptoCompare.</li>
+      <li><strong>Netlify:</strong> Hosting and serverless function platform. Netlify may collect standard server access logs per their privacy policy.</li>
+    </ul>
+    <p>We do not sell, trade, or share your information with any third parties beyond what is required to operate these services.</p>
+
+    <h2>6. Cookies</h2>
+    <p>OmenFi does not use cookies. We use browser localStorage solely for session persistence (wallet address and unlock tokens). This data is stored on your device and is not transmitted to third parties.</p>
+
+    <h2>7. Children's Privacy</h2>
+    <p>OmenFi is not directed at individuals under the age of 18. We do not knowingly collect information from minors. If you believe a minor has used our service, please contact us.</p>
+
+    <h2>8. Your Rights</h2>
+    <p>Because OmenFi does not maintain a user database, there is no personal data for us to delete or export on your behalf. You can remove all locally stored data at any time by clearing your browser's localStorage for this site. Your on-chain transaction history is permanent and cannot be deleted — this is a property of public blockchains.</p>
+
+    <h2>9. Changes to This Policy</h2>
+    <p>We may update this Privacy Policy from time to time. Changes will be reflected by an updated date at the top of this page. Continued use of OmenFi after changes constitutes acceptance of the updated policy.</p>
+
+    <h2>10. Contact</h2>
+    <p>If you have questions about this Privacy Policy or OmenFi's data practices, you can reach us at: <a href="mailto:privacy@omenfi.com">privacy@omenfi.com</a></p>
+
+    <hr class="divider">
+
+    <div class="footer">OmenFi © 2026 · <a href="/">Back to App</a></div>
+  </div>
+</body>
+</html>
