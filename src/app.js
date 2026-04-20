@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v7.8
+   Build: 2026-04-17-v7.9
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v7.8');
+console.log('OmenFi build: 2026-04-14-v7.9');
 'use strict';
 
 // ============================================
@@ -2137,18 +2137,10 @@ async function sendSolPayment(assetId, lamports) {
         });
         console.log('Auth OK:', !!authResult?.accounts?.[0]);
 
-        // Serialize inside the callback
-        console.log('Serializing...');
-        const serializedBytes = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
-        // Convert to base64 safely for large arrays
-        let binary = '';
-        const bytes = new Uint8Array(serializedBytes);
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-        const serializedBase64 = btoa(binary);
-        console.log('Serialized:', serializedBase64.length, 'chars');
-
+        // Pass Transaction object directly — web3js wrapper handles serialization internally
+        console.log('Calling signAndSendTransactions with Transaction object...');
         const results = await mwaWallet.signAndSendTransactions({
-          transactions: [serializedBase64],
+          transactions: [transaction],
         });
         console.log('Got results:', JSON.stringify(results)?.slice(0,80));
         return results.signatures[0];
