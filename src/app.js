@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v7.4
+   Build: 2026-04-17-v7.5
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v7.4');
+console.log('OmenFi build: 2026-04-14-v7.5');
 'use strict';
 
 // ============================================
@@ -2123,17 +2123,19 @@ async function sendSolPayment(assetId, lamports) {
         });
         console.log('Auth OK, account:', authResult?.accounts?.[0]?.address ? 'present' : 'missing');
 
-        // Serialize the transaction
+        // Serialize transaction to bytes then base64
+        // MWA signAndSendTransactions requires base64-encoded transaction strings
         console.log('Serializing tx, memo:', memoText);
-        const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
-        console.log('Serialized OK, bytes:', serialized.length);
+        const serializedBytes = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
+        const serializedBase64 = btoa(String.fromCharCode(...serializedBytes));
+        console.log('Serialized OK, base64 length:', serializedBase64.length);
 
         const results = await mwaWallet.signAndSendTransactions({
-          transactions: [serialized],
+          transactions: [serializedBase64],
         });
-        console.log('signAndSendTransactions result:', JSON.stringify(results)?.slice(0, 100));
+        console.log('signAndSendTransactions result keys:', Object.keys(results || {}));
         const sig = results.signatures[0];
-        console.log('Raw sig type:', typeof sig, sig?.constructor?.name, JSON.stringify(sig)?.slice(0,60));
+        console.log('Raw sig:', typeof sig, sig?.constructor?.name, String(sig).slice(0,60));
         return sig;
       });
 
