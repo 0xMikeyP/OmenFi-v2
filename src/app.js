@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v7.9
+   Build: 2026-04-17-v8.0
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v7.9');
+console.log('OmenFi build: 2026-04-14-v8.0');
 'use strict';
 
 // ============================================
@@ -2143,40 +2143,28 @@ async function sendSolPayment(assetId, lamports) {
           transactions: [transaction],
         });
         console.log('Got results:', JSON.stringify(results)?.slice(0,80));
-        return results.signatures[0];
+        // results is an array of signature strings e.g. ["5FL8L3254..."]
+        const sig = Array.isArray(results) ? results[0] : results?.signatures?.[0];
+        console.log('Signature:', sig?.slice(0,20));
+        return sig;
       });
 
       console.log('MWA result type:', typeof result, result instanceof Uint8Array ? 'Uint8Array' : Array.isArray(result) ? 'Array' : '', JSON.stringify(result)?.slice(0,80));
-      // MWA signAndSendTransactions returns signatures as Uint8Array
-      // Convert Uint8Array directly to base58 string
-      const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-      function toBase58(bytes) {
-        let num = BigInt('0x' + Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join(''));
-        let encoded = '';
-        while (num > 0n) { encoded = BASE58_ALPHABET[Number(num % 58n)] + encoded; num = num / 58n; }
-        for (const byte of bytes) { if (byte === 0) encoded = '1' + encoded; else break; }
-        return encoded;
+      // result is already a base58 signature string from web3js wrapper
+      // e.g. "5FL8L3254eye1C9NfAY9tKxJ8pn96RbM4g..."
+      if (typeof result === 'string' && result.length > 40) {
+        signature = result;
+      } else if (result instanceof Uint8Array) {
+        // Fallback: convert Uint8Array to base58
+        const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+        let num = BigInt('0x' + Array.from(result).map(b => b.toString(16).padStart(2,'0')).join(''));
+        let enc = '';
+        while (num > 0n) { enc = BASE58[Number(num % 58n)] + enc; num = num / 58n; }
+        signature = enc;
+      } else {
+        throw new Error('Unexpected signature format: ' + typeof result);
       }
-
-      // result can be Uint8Array, base64 string, or already base58
-      let sigBytes;
-      if (result instanceof Uint8Array) {
-        sigBytes = result;
-      } else if (typeof result === 'string') {
-        // Check if it looks like base58 already (all base58 chars, ~88 chars)
-        if (/^[1-9A-HJ-NP-Za-km-z]{80,100}$/.test(result)) {
-          signature = result; // already base58
-          sigBytes = null;
-        } else {
-          // Try base64 decode
-          try { sigBytes = Uint8Array.from(atob(result), c => c.charCodeAt(0)); }
-          catch(e) { signature = result; sigBytes = null; } // use as-is
-        }
-      } else if (result && typeof result === 'object') {
-        sigBytes = new Uint8Array(Object.values(result));
-      }
-
-      if (sigBytes) signature = toBase58(sigBytes);
+      console.log('Final signature:', signature?.slice(0,20) + '...');
 
     } else {
       // Phantom — use existing signAndSendTransaction
