@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v7.6
+   Build: 2026-04-17-v7.7
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v7.6');
+console.log('OmenFi build: 2026-04-14-v7.7');
 'use strict';
 
 // ============================================
@@ -2048,59 +2048,69 @@ async function sendSolPayment(assetId, lamports) {
   if (!blockhash || blockhash.length < 32) throw new Error('Invalid blockhash received: ' + JSON.stringify(blockhash));
   console.log('Blockhash OK:', blockhash.slice(0,20) + '...');
 
-  const fromPubkey = new web3.PublicKey(state.wallet);
-  const toPubkey   = new web3.PublicKey(TREASURY_WALLET);
+  console.log('Building transaction...');
+  console.log('wallet:', state.wallet?.slice(0,10), 'treasury:', TREASURY_WALLET?.slice(0,10));
+
+  let fromPubkey, toPubkey;
+  try {
+    fromPubkey = new web3.PublicKey(state.wallet);
+    console.log('fromPubkey OK');
+    toPubkey = new web3.PublicKey(TREASURY_WALLET);
+    console.log('toPubkey OK');
+  } catch(e) {
+    throw new Error('Invalid public key: ' + e.message);
+  }
+
   const lamportsInt = Math.round(Number(lamports));
+  console.log('lamports:', lamportsInt);
 
   // Encode lamports as little-endian 8 bytes manually
   function encodeLamports(amount) {
     const buf = new Uint8Array(8);
     let val = amount;
-    for (let i = 0; i < 8; i++) {
-      buf[i] = val & 0xff;
-      val = Math.floor(val / 256);
-    }
+    for (let i = 0; i < 8; i++) { buf[i] = val & 0xff; val = Math.floor(val / 256); }
     return buf;
   }
 
-  // System program transfer instruction layout:
-  // [4 bytes: instruction index=2] [8 bytes: lamports little-endian]
   const instrData = new Uint8Array(12);
-  instrData[0] = 2; instrData[1] = 0; instrData[2] = 0; instrData[3] = 0; // index = 2
+  instrData[0] = 2; instrData[1] = 0; instrData[2] = 0; instrData[3] = 0;
   instrData.set(encodeLamports(lamportsInt), 4);
+  console.log('instrData OK');
 
-  // Build the transaction using web3.js Transaction + TransactionInstruction
-  // but with our own pre-encoded data (avoids SystemProgram.transfer encoding bug)
-  const SYSTEM_PROGRAM_ID = new web3.PublicKey('11111111111111111111111111111111');
+  let instruction, memoInstruction, transaction;
+  try {
+    const SYSTEM_PROGRAM_ID = new web3.PublicKey('11111111111111111111111111111111');
+    instruction = new web3.TransactionInstruction({
+      keys: [
+        { pubkey: fromPubkey, isSigner: true,  isWritable: true },
+        { pubkey: toPubkey,   isSigner: false, isWritable: true },
+      ],
+      programId: SYSTEM_PROGRAM_ID,
+      data: instrData,
+    });
+    console.log('transfer instruction OK');
+  } catch(e) { throw new Error('Transfer instruction failed: ' + e.message); }
 
-  const instruction = new web3.TransactionInstruction({
-    keys: [
-      { pubkey: fromPubkey, isSigner: true,  isWritable: true  },
-      { pubkey: toPubkey,   isSigner: false, isWritable: true  },
-    ],
-    programId: SYSTEM_PROGRAM_ID,
-    data: instrData,
-  });
+  try {
+    const MEMO_PROGRAM_ID = new web3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+    const memoText = 'omenfi:' + assetId;
+    const memoData = new TextEncoder().encode(memoText);
+    memoInstruction = new web3.TransactionInstruction({
+      keys: [{ pubkey: fromPubkey, isSigner: true, isWritable: false }],
+      programId: MEMO_PROGRAM_ID,
+      data: memoData,
+    });
+    console.log('memo instruction OK');
+  } catch(e) { throw new Error('Memo instruction failed: ' + e.message); }
 
-  // Memo instruction — permanent on-chain receipt for this purchase
-  // Format: omenfi:<assetId>  e.g. omenfi:ethereum, omenfi:all, omenfi:tip
-  // Recovery reads this memo to know exactly which asset was purchased
-  const MEMO_PROGRAM_ID = new web3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
-  const memoText = 'omenfi:' + assetId;
-  // Use TextEncoder instead of Buffer.from — pure browser API, no polyfill needed
-  const memoData = new TextEncoder().encode(memoText);
-  const memoInstruction = new web3.TransactionInstruction({
-    keys: [{ pubkey: fromPubkey, isSigner: true, isWritable: false }],
-    programId: MEMO_PROGRAM_ID,
-    data: memoData,
-  });
-
-  const transaction = new web3.Transaction({
-    recentBlockhash: blockhash,
-    feePayer: fromPubkey,
-  });
-  transaction.add(instruction);
-  transaction.add(memoInstruction);
+  try {
+    transaction = new web3.Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
+    console.log('Transaction created OK');
+    transaction.add(instruction);
+    console.log('Added transfer instruction');
+    transaction.add(memoInstruction);
+    console.log('Added memo instruction');
+  } catch(e) { throw new Error('Transaction build failed: ' + e.message); }
 
   let signature;
   try {
