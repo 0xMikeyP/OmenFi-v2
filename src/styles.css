@@ -913,8 +913,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
   white-space: nowrap;
 }
 .cg-main.muted { color: var(--t2); }
-/* Green only allowed in diff column */
-.diff-val .cg-main.green { color: var(--green); }
+/* Green ONLY in the difference column — not in std or opt columns */
+.diff-val .cg-diff.pos { color: var(--green); }
+.diff-val .cg-diff.neg { color: var(--red); }
 
 /* Difference value — center column hero */
 .cg-diff {
