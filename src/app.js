@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v8.3
+   Build: 2026-04-17-v8.5
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v8.3');
+console.log('OmenFi build: 2026-04-14-v8.5');
 'use strict';
 
 // ============================================
@@ -790,33 +790,81 @@ async function runBacktest(){
 // RENDER: RESULTS
 // ============================================
 function renderResults(r, asset, amount, freq, start, end, smartR){
-  const a=ASSETS[asset], pos=r.roi>=0;
-  $('results-meta').innerHTML=`Backtesting <strong>$${fmt(amount)} ${freq}</strong> buys into <strong>${a.name}</strong> &nbsp;·&nbsp; <strong>${start}</strong> → <strong>${end}</strong>`;
-  $('m-value').textContent='$'+fmt(r.finalValue);
-  $('m-change').textContent=(pos?'▲ +':'▼ ')+'$'+fmt(Math.abs(r.netProfit));
-  $('m-change').className='metric-change '+(pos?'pos':'neg');
-  $('m-invested').textContent='$'+fmt(r.invested);
-  $('m-return').textContent=(pos?'+':'')+' $'+fmt(r.netProfit);
-  $('m-return').className='metric-value '+(pos?'green':'red');
-  $('m-roi').textContent=(pos?'+':'')+r.roi.toFixed(1)+'%';
-  $('m-roi').className='metric-value '+(pos?'green':'red');
-  $('m-buys').textContent=r.count.toLocaleString();
-  $('m-avg-price').textContent='$'+fmt(r.avgBuy);
+  const a = ASSETS[asset];
+  const pos = r.roi >= 0;
 
-  // Coin accumulation comparison
-  const stdCoins = r.coins || 0;
-  const optCoins = smartR ? (smartR.coins || 0) : 0;
-  if ($('m-std-coins')) $('m-std-coins').textContent = fmtCoins(stdCoins);
-  if ($('m-opt-coins') && smartR) {
-    $('m-opt-coins').textContent = fmtCoins(optCoins);
-    const coinDiff = optCoins - stdCoins;
-    const coinDiffEl = $('m-coin-diff');
-    if (coinDiffEl) {
-      coinDiffEl.textContent = (coinDiff >= 0 ? '+' : '') + fmtCoins(Math.abs(coinDiff));
-      coinDiffEl.className = 'metric-change ' + (coinDiff >= 0 ? 'pos' : 'neg');
+  // Meta description
+  $('results-meta').innerHTML = `Backtesting <strong>$${fmt(amount)} ${freq}</strong> buys into <strong>${a.name}</strong> &nbsp;·&nbsp; <strong>${start}</strong> → <strong>${end}</strong>`;
+
+  // ── Standard DCA column ──
+  $('m-value').textContent = '$' + fmt(r.finalValue);
+  $('m-change').textContent = (pos ? '▲ +' : '▼ ') + '$' + fmt(Math.abs(r.netProfit));
+  $('m-change').className = 'cg-sub ' + (pos ? 'pos' : 'neg');
+
+  $('m-std-coins').textContent = fmtCoins(r.coins || 0);
+  $('m-invested').textContent = '$' + fmt(r.invested);
+  $('m-return').textContent = (pos ? '+ ' : '') + '$' + fmt(r.netProfit);
+  $('m-return').className = 'cg-main ' + (pos ? 'green' : 'neg');
+  $('m-roi').textContent = (pos ? '+' : '') + r.roi.toFixed(1) + '%';
+  $('m-roi').className = 'cg-main ' + (pos ? 'green' : 'neg');
+  $('m-avg-price').textContent = '$' + fmt(r.avgBuy);
+  $('m-buys').textContent = r.count.toLocaleString();
+
+  // ── Optimized DCA column ──
+  if (smartR) {
+    const optPos = smartR.roi >= 0;
+    const valueDiff  = smartR.finalValue - r.finalValue;
+    const profitDiff = smartR.netProfit  - r.netProfit;
+    const roiDiff    = smartR.roi        - r.roi;
+    const coinDiff   = (smartR.coins || 0) - (r.coins || 0);
+    const avgDiff    = r.avgBuy - smartR.avgBuy; // lower avg = better
+
+    // Helper to set diff cell
+    function setDiff(id, val, isPos, fmt_fn) {
+      const el = $(id); if (!el) return;
+      el.textContent = (isPos ? '+' : '') + fmt_fn(val);
+      el.className = 'cg-diff ' + (isPos ? 'pos' : val < 0 ? 'neg' : 'muted');
     }
-  } else if ($('m-opt-coins')) {
-    $('m-opt-coins').textContent = '—';
+
+    // Final portfolio value
+    if ($('m-opt-value')) $('m-opt-value').textContent = '$' + fmt(smartR.finalValue);
+    setDiff('m-opt-value-diff', valueDiff, valueDiff >= 0, v => '$' + fmt(Math.abs(v)));
+
+    // Coins accumulated
+    if ($('m-opt-coins')) $('m-opt-coins').textContent = fmtCoins(smartR.coins || 0);
+    setDiff('m-coin-diff', coinDiff, coinDiff >= 0, v => fmtCoins(Math.abs(v)));
+
+    // Total invested (same capital — diff col handled in HTML)
+    if ($('m-opt-invested')) $('m-opt-invested').textContent = '$' + fmt(smartR.invested);
+
+    // Net profit
+    if ($('m-opt-profit')) {
+      $('m-opt-profit').textContent = (optPos ? '+ ' : '') + '$' + fmt(smartR.netProfit);
+      $('m-opt-profit').className = 'cg-main ' + (optPos ? 'green' : 'neg');
+    }
+    setDiff('m-opt-profit-diff', profitDiff, profitDiff >= 0, v => '$' + fmt(Math.abs(v)));
+
+    // ROI
+    if ($('m-opt-roi')) {
+      $('m-opt-roi').textContent = (optPos ? '+' : '') + smartR.roi.toFixed(1) + '%';
+      $('m-opt-roi').className = 'cg-main ' + (optPos ? 'green' : 'neg');
+    }
+    setDiff('m-opt-roi-diff', roiDiff, roiDiff >= 0, v => v.toFixed(1) + '%');
+
+    // Avg buy price (lower avg is better — negative diff is good)
+    if ($('m-opt-avg-price')) $('m-opt-avg-price').textContent = '$' + fmt(smartR.avgBuy);
+    setDiff('m-opt-avg-diff', avgDiff, avgDiff >= 0, v => '$' + fmt(Math.abs(v)));
+
+    // Buys executed
+    if ($('m-opt-buys')) $('m-opt-buys').textContent = (smartR.count || 0).toLocaleString();
+
+  } else {
+    // No optimized data — show dashes
+    ['m-opt-value','m-opt-value-diff','m-opt-coins','m-coin-diff','m-opt-invested',
+     'm-opt-profit','m-opt-profit-diff','m-opt-roi','m-opt-roi-diff',
+     'm-opt-avg-price','m-opt-avg-diff','m-opt-buys'].forEach(id => {
+      if ($(id)) $(id).textContent = '—';
+    });
   }
 }
 
