@@ -53,7 +53,7 @@
         </svg>
         <span class="logo-text">OmenFi</span>
         <span class="logo-tag">BETA</span>
-        <span style="font-size:0.55rem;color:#ff8c2a;opacity:0.8;font-family:monospace;margin-left:4px">v8.3</span>
+        <span style="font-size:0.55rem;color:#ff8c2a;opacity:0.8;font-family:monospace;margin-left:4px">v8.5</span>
       </div>
       <button class="wallet-btn" id="wallet-btn">
         <span class="wallet-btn-icon">◎</span>
@@ -224,41 +224,125 @@
         <section class="panel" id="panel-results">
           <div class="panel-label">◈ II — Backtest Results</div>
           <div class="results-meta" id="results-meta"></div>
-          <div class="metrics-grid">
-            <div class="metric-card hero-card">
-              <div class="metric-label">Final Portfolio Value</div>
-              <div class="metric-value hero-value" id="m-value">—</div>
-              <div class="metric-change" id="m-change">—</div>
+          <!-- Side-by-side comparison: Standard | Δ Difference | Optimized -->
+          <div class="compare-grid">
+
+            <!-- Column headers -->
+            <div class="cg-header std-header">
+              <div class="cg-header-label">Standard DCA</div>
             </div>
-            <div class="metric-card hero-card coin-hero">
-              <div class="metric-label">Optimized — Coins Accumulated</div>
-              <div class="metric-value hero-value green" id="m-opt-coins">—</div>
-              <div class="metric-change" id="m-coin-diff">—</div>
+            <div class="cg-header diff-header">
+              <div class="cg-header-label">Δ Difference</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-label">Total Invested</div>
-              <div class="metric-value" id="m-invested">—</div>
+            <div class="cg-header opt-header">
+              <div class="cg-header-label">Optimized DCA</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-label">Net Profit</div>
-              <div class="metric-value" id="m-return">—</div>
+
+            <!-- Final Portfolio Value -->
+            <div class="cg-row-label-above">Final Portfolio Value</div>
+            <div class="cg-row-label-above cg-row-label-diff"></div>
+            <div class="cg-row-label-above"></div>
+
+            <div class="cg-val std-val">
+              <div class="cg-main" id="m-value">—</div>
             </div>
-            <div class="metric-card highlight">
-              <div class="metric-label">ROI</div>
-              <div class="metric-value" id="m-roi">—</div>
+            <div class="cg-val diff-val">
+              <div class="cg-diff" id="m-opt-value-diff">—</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-label">Buys Executed</div>
-              <div class="metric-value" id="m-buys">—</div>
+            <div class="cg-val opt-val">
+              <div class="cg-main green" id="m-opt-value">—</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-label">Avg Buy Price</div>
-              <div class="metric-value" id="m-avg-price">—</div>
+
+            <!-- Coins Accumulated -->
+            <div class="cg-row-label-above">Coins Accumulated</div>
+            <div class="cg-row-label-above"></div>
+            <div class="cg-row-label-above"></div>
+
+            <div class="cg-val std-val">
+              <div class="cg-main" id="m-std-coins">—</div>
             </div>
-            <div class="metric-card coin-card">
-              <div class="metric-label">Std DCA — Coins</div>
-              <div class="metric-value" id="m-std-coins">—</div>
+            <div class="cg-val diff-val">
+              <div class="cg-diff" id="m-coin-diff">—</div>
             </div>
+            <div class="cg-val opt-val">
+              <div class="cg-main green" id="m-opt-coins">—</div>
+            </div>
+
+            <!-- Total Invested -->
+            <div class="cg-row-label-above">Total Invested</div>
+            <div class="cg-row-label-above"></div>
+            <div class="cg-row-label-above"></div>
+
+            <div class="cg-val std-val">
+              <div class="cg-main" id="m-invested">—</div>
+            </div>
+            <div class="cg-val diff-val">
+              <div class="cg-diff muted" style="font-size:0.65rem;opacity:0.7">same capital</div>
+            </div>
+            <div class="cg-val opt-val">
+              <div class="cg-main muted" id="m-opt-invested">—</div>
+            </div>
+
+            <!-- Net Profit -->
+            <div class="cg-row-label-above">Net Profit</div>
+            <div class="cg-row-label-above"></div>
+            <div class="cg-row-label-above"></div>
+
+            <div class="cg-val std-val">
+              <div class="cg-main" id="m-return">—</div>
+            </div>
+            <div class="cg-val diff-val">
+              <div class="cg-diff" id="m-opt-profit-diff">—</div>
+            </div>
+            <div class="cg-val opt-val">
+              <div class="cg-main green" id="m-opt-profit">—</div>
+            </div>
+
+            <!-- ROI -->
+            <div class="cg-row-label-above highlight-label">ROI</div>
+            <div class="cg-row-label-above highlight-label"></div>
+            <div class="cg-row-label-above highlight-label"></div>
+
+            <div class="cg-val std-val highlight-val">
+              <div class="cg-main" id="m-roi">—</div>
+            </div>
+            <div class="cg-val diff-val highlight-val">
+              <div class="cg-diff" id="m-opt-roi-diff">—</div>
+            </div>
+            <div class="cg-val opt-val highlight-val">
+              <div class="cg-main green" id="m-opt-roi">—</div>
+            </div>
+
+            <!-- Avg Buy Price -->
+            <div class="cg-row-label-above">Avg Buy Price</div>
+            <div class="cg-row-label-above"></div>
+            <div class="cg-row-label-above"></div>
+
+            <div class="cg-val std-val">
+              <div class="cg-main" id="m-avg-price">—</div>
+            </div>
+            <div class="cg-val diff-val">
+              <div class="cg-diff" id="m-opt-avg-diff">—</div>
+            </div>
+            <div class="cg-val opt-val">
+              <div class="cg-main green" id="m-opt-avg-price">—</div>
+            </div>
+
+            <!-- Buys Executed -->
+            <div class="cg-row-label-above">Buys Executed</div>
+            <div class="cg-row-label-above"></div>
+            <div class="cg-row-label-above"></div>
+
+            <div class="cg-val std-val last-row">
+              <div class="cg-main" id="m-buys">—</div>
+            </div>
+            <div class="cg-val diff-val last-row">
+              <div class="cg-diff muted">—</div>
+            </div>
+            <div class="cg-val opt-val last-row">
+              <div class="cg-main muted" id="m-opt-buys">—</div>
+            </div>
+
           </div>
           <div class="chart-wrap">
             <div class="chart-top-bar">
