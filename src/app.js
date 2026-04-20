@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v8.5
+   Build: 2026-04-17-v8.6
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v8.5');
+console.log('OmenFi build: 2026-04-14-v8.6');
 'use strict';
 
 // ============================================
@@ -798,8 +798,7 @@ function renderResults(r, asset, amount, freq, start, end, smartR){
 
   // ── Standard DCA column ──
   $('m-value').textContent = '$' + fmt(r.finalValue);
-  $('m-change').textContent = (pos ? '▲ +' : '▼ ') + '$' + fmt(Math.abs(r.netProfit));
-  $('m-change').className = 'cg-sub ' + (pos ? 'pos' : 'neg');
+  // m-change removed — net profit shown in m-return cell
 
   $('m-std-coins').textContent = fmtCoins(r.coins || 0);
   $('m-invested').textContent = '$' + fmt(r.invested);
