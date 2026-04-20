@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v7.7
+   Build: 2026-04-17-v7.8
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v7.7');
+console.log('OmenFi build: 2026-04-14-v7.8');
 'use strict';
 
 // ============================================
@@ -2116,12 +2116,17 @@ async function sendSolPayment(assetId, lamports) {
   try {
     if (state.walletProvider === 'seedvault') {
       // Seed Vault Wallet — sign and send via MWA transact
-      const storedAuth = JSON.parse(sessionStorage.getItem('mwa_auth_token') || '{}');
+      // CRITICAL: mwaTransact must be called with the pre-built transaction
+      // The intent fires immediately, then we serialize inside the callback
+      console.log('mwaTransact type:', typeof window.mwaTransact, 'is function:', typeof window.mwaTransact === 'function');
+      if (!window.mwaTransact || typeof window.mwaTransact !== 'function') {
+        throw new Error('MWA transact not available — type: ' + typeof window.mwaTransact);
+      }
 
       const result = await window.mwaTransact(async (mwaWallet) => {
-        // Always re-authorize fresh — don't rely on stored auth token
-        // MWA session expires quickly and causes JWT errors if stale
-        console.log('Authorizing with Seed Vault...');
+        console.log('Inside mwaTransact callback — session established');
+
+        // Authorize fresh each time
         const authResult = await mwaWallet.authorize({
           chain: 'solana:mainnet',
           identity: {
@@ -2130,22 +2135,23 @@ async function sendSolPayment(assetId, lamports) {
             icon: 'icon-192.png',
           },
         });
-        console.log('Auth OK, account:', authResult?.accounts?.[0]?.address ? 'present' : 'missing');
+        console.log('Auth OK:', !!authResult?.accounts?.[0]);
 
-        // Serialize transaction to bytes then base64
-        // MWA signAndSendTransactions requires base64-encoded transaction strings
-        console.log('Serializing tx, memo:', memoText);
+        // Serialize inside the callback
+        console.log('Serializing...');
         const serializedBytes = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
-        const serializedBase64 = btoa(String.fromCharCode(...serializedBytes));
-        console.log('Serialized OK, base64 length:', serializedBase64.length);
+        // Convert to base64 safely for large arrays
+        let binary = '';
+        const bytes = new Uint8Array(serializedBytes);
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+        const serializedBase64 = btoa(binary);
+        console.log('Serialized:', serializedBase64.length, 'chars');
 
         const results = await mwaWallet.signAndSendTransactions({
           transactions: [serializedBase64],
         });
-        console.log('signAndSendTransactions result keys:', Object.keys(results || {}));
-        const sig = results.signatures[0];
-        console.log('Raw sig:', typeof sig, sig?.constructor?.name, String(sig).slice(0,60));
-        return sig;
+        console.log('Got results:', JSON.stringify(results)?.slice(0,80));
+        return results.signatures[0];
       });
 
       console.log('MWA result type:', typeof result, result instanceof Uint8Array ? 'Uint8Array' : Array.isArray(result) ? 'Array' : '', JSON.stringify(result)?.slice(0,80));
