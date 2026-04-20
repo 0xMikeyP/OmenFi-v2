@@ -865,18 +865,20 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 
 /* Row label — spans full width above each metric group */
 .cg-row-label-above {
-  padding: 8px 12px 2px;
+  padding: 10px 12px 3px;
   font-family: var(--fm);
-  font-size: 0.58rem;
-  letter-spacing: 0.12em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--t3);
+  color: var(--t2);
   background: var(--bg3);
   border-top: 1px solid var(--b);
+  text-align: center;
 }
 .cg-row-label-above:first-of-type,
 .compare-grid > .cg-row-label-above:nth-child(4) { border-top: none; }
-.highlight-label { color: rgba(0,232,122,0.7); font-weight: 700; }
+.highlight-label { color: var(--text); font-weight: 700; }
 
 /* Value cells */
 .cg-val {
@@ -910,8 +912,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
   line-height: 1.2;
   white-space: nowrap;
 }
-.cg-main.green { color: var(--green); }
 .cg-main.muted { color: var(--t2); }
+/* Green only allowed in diff column */
+.diff-val .cg-main.green { color: var(--green); }
 
 /* Difference value — center column hero */
 .cg-diff {
