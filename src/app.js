@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v8.9
+   Build: 2026-04-17-v9.0
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v8.9');
+console.log('OmenFi build: 2026-04-14-v9.0');
 'use strict';
 
 // ============================================
@@ -1098,25 +1098,29 @@ function renderScrubStats(idx) {
   let html = '';
 
   if (view === 'dollar') {
-    const stdROI   = inv > 0 ? ((stdVal - inv) / inv * 100) : 0;
-    const smartROI = (smartVal && inv > 0) ? ((smartVal - inv) / inv * 100) : null;
-    const diff     = smartVal != null ? smartVal - stdVal : null;
-    const stdColor = stdVal >= inv ? '#ff8c2a' : '#ff3a5c';
+    const stdProfit  = stdVal - inv;
+    const stdROI     = inv > 0 ? (stdProfit / inv * 100) : 0;
+    const smartProfit= smartVal != null ? smartVal - inv : null;
+    const smartROI   = (smartVal && inv > 0) ? ((smartVal - inv) / inv * 100) : null;
+    const diff       = smartVal != null ? smartVal - stdVal : null;
+    const stdProfCol = stdProfit >= 0 ? '#ff8c2a' : '#ff3a5c';
+    const smartProfCol = smartProfit != null ? (smartProfit >= 0 ? '#00e87a' : '#ff3a5c') : '#00e87a';
 
-    html += card('#ff8c2a', 'Std DCA',
+    html += card(stdProfCol, 'Standard DCA',
       '$'+fmt(stdVal),
-      (stdROI>=0?'+':'')+stdROI.toFixed(1)+'% ROI');
+      'Net: '+(stdProfit>=0?'+':'')+' $'+fmt(stdProfit)+' ('+((stdROI>=0?'+':'')+stdROI.toFixed(1))+'%)');
 
-    html += card('rgba(255,255,255,0.4)', 'Invested',
-      '$'+fmt(inv), '');
+    html += card('rgba(255,255,255,0.3)', 'Invested',
+      '$'+fmt(inv), 'Total deployed');
 
     if (smartVal != null) {
-      html += card('#00e87a', 'Optimized',
+      html += card(smartProfCol, 'Optimized DCA',
         '$'+fmt(smartVal),
-        smartROI != null ? (smartROI>=0?'+':'')+smartROI.toFixed(1)+'% ROI' : '');
+        'Net: '+(smartProfit>=0?'+':'')+' $'+fmt(smartProfit)+(smartROI!=null?' ('+(smartROI>=0?'+':'')+smartROI.toFixed(1)+'%)':''));
 
-      html += card(diff>=0?'#00e87a':'#ff3a5c', 'Difference',
-        (diff>=0?'+':'')+' $'+fmt(Math.abs(diff)), '', true);
+      html += card(diff>=0?'#00e87a':'#ff3a5c', 'Edge',
+        (diff>=0?'+ $':'- $')+fmt(Math.abs(diff)),
+        'from timing', true);
     }
 
   } else {
@@ -1326,7 +1330,10 @@ function renderForwardPlanner(seasonality, opt, amount, frequency, assetId) {
   const sym = a.symbol;
 
   // Build the next 12 months from today
-  const freqLabel = frequency === 'daily' ? 'day' : frequency === 'weekly' ? 'week' : 'month';
+  // Calculate buys per month based on frequency
+  const buysPerMonth = frequency === 'daily' ? 30 : frequency === 'weekly' ? 4.33 : 1;
+  const stdMonthly = Math.round(amount * buysPerMonth); // e.g. $100/wk = ~$433/mo
+
   const months = [];
   for (let i = 0; i < 12; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
@@ -1336,13 +1343,16 @@ function renderForwardPlanner(seasonality, opt, amount, frequency, assetId) {
     const isSkip  = opt ? opt.best.skip.includes(m)  : false;
     const isBoost = opt ? opt.best.boost.includes(m) : false;
     const mult    = opt ? opt.best.mult : 1;
-    const buyAmt  = isSkip ? 0 : isBoost ? amount * mult : amount;
+    // Monthly total = per-buy amount × buys per month
+    // For optimized: boost months get more, skip months get 0
+    // Use normalized per-buy so total annual capital stays equal
+    const monthlyAmt = isSkip ? 0 : isBoost ? Math.round(stdMonthly * mult) : stdMonthly;
     const isCurrent = i === 0;
-    months.push({ month: m, year: yr, season: s, isSkip, isBoost, mult, buyAmt, isCurrent });
+    months.push({ month: m, year: yr, season: s, isSkip, isBoost, mult, buyAmt: monthlyAmt, isCurrent });
   }
 
   const totalOptimized = months.reduce((s,m) => s + m.buyAmt, 0);
-  const totalStandard  = amount * 12;
+  const totalStandard  = stdMonthly * 12;
   const skippedMonths  = months.filter(m => m.isSkip).length;
   const boostedMonths  = months.filter(m => m.isBoost).length;
 
@@ -1351,11 +1361,11 @@ function renderForwardPlanner(seasonality, opt, amount, frequency, assetId) {
     const s = m.season;
     const sign = s.avg >= 0 ? '+' : '';
     let actionClass = 'plan-standard';
-    let actionLabel = `$${fmt(amount)}`;
-    let actionTag   = 'Standard buy';
+    let actionLabel = `$${fmt(stdMonthly)}`;
+    let actionTag   = `Standard — $${fmt(amount)}/${frequency === 'weekly' ? 'wk' : frequency === 'daily' ? 'day' : 'mo'}`;
     let actionIcon  = '→';
-    if (m.isSkip)  { actionClass='plan-skip';  actionLabel='$0';              actionTag=`Skip — price historically high`; actionIcon='🚫'; }
-    if (m.isBoost) { actionClass='plan-boost'; actionLabel=`$${fmt(m.buyAmt)}`; actionTag=`${m.mult}× — price historically low`; actionIcon='⚡'; }
+    if (m.isSkip)  { actionClass='plan-skip';  actionLabel='Skip';              actionTag=`Historically high — hold off`; actionIcon='🚫'; }
+    if (m.isBoost) { actionClass='plan-boost'; actionLabel=`$${fmt(m.buyAmt)}`; actionTag=`${m.mult}× boost — historically low`; actionIcon='⚡'; }
 
     const isNow = m.isCurrent;
     const monthName = MONTHS_FULL[m.month];
