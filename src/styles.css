@@ -855,6 +855,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
   border-left: 1px solid var(--b);
   border-right: 1px solid var(--b);
   min-width: 72px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .opt-header {
   background: rgba(0,232,122,0.08);
