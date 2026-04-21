@@ -123,16 +123,14 @@ exports.handler = async function(event) {
     const rawKeys = tx.transaction?.message?.accountKeys || [];
     const accountKeys = rawKeys.map(extractAddress);
 
-    console.log('Account keys in tx:', accountKeys);
-    console.log('Looking for treasury:', TREASURY);
-    console.log('Looking for sender:', walletAddress);
+    // Verify transaction details server-side
 
     // Find treasury index
     const treasuryIdx = accountKeys.findIndex(k => k === TREASURY);
     if (treasuryIdx === -1) {
       return {
         statusCode: 400, headers,
-        body: JSON.stringify({ error: `Treasury wallet not found in transaction. Keys found: ${accountKeys.join(', ')}` })
+        body: JSON.stringify({ error: 'Payment could not be verified. Please contact support.' })
       };
     }
 
@@ -142,7 +140,6 @@ exports.handler = async function(event) {
     const received = (post - pre) / LAMPORTS_PER_SOL;
     const required = ASSET_PRICES[assetId];
 
-    console.log(`Treasury balance: pre=${pre} post=${post} received=${received} required=${required}`);
 
     if (received < required * 0.96) { // 4% tolerance for bundle rounding
       return {
@@ -151,10 +148,16 @@ exports.handler = async function(event) {
       };
     }
 
-    // Verify sender is in the transaction
-    const senderIdx = accountKeys.findIndex(k => k === walletAddress);
-    if (senderIdx === -1) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Sender wallet not found in transaction' }) };
+    // Verify sender is the fee payer (index 0) — prevents false matches
+    if (accountKeys[0] !== walletAddress) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Wallet address does not match transaction sender' }) };
+    }
+
+    // Also verify sender balance decreased (they actually paid)
+    const senderPre  = Number(tx.meta.preBalances[0])  || 0;
+    const senderPost = Number(tx.meta.postBalances[0]) || 0;
+    if (senderPost >= senderPre) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Sender balance did not decrease — not a valid payment' }) };
     }
 
     // Note: No time restriction — purchases are permanent and never expire
