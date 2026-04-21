@@ -14,7 +14,7 @@
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://s2.coinmarketcap.com https://mintcdn.com; connect-src 'self' https://min-api.cryptocompare.com https://api.mainnet-beta.solana.com https://mainnet.helius-rpc.com https://solana-mainnet.rpc.extrnode.com; font-src 'self'; frame-ancestors 'none';" 
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://s2.coinmarketcap.com https://mintcdn.com; connect-src 'self' https://min-api.cryptocompare.com https://api.mainnet-beta.solana.com https://mainnet.helius-rpc.com https://solana-mainnet.rpc.extrnode.com ws://localhost:* wss://localhost:*; font-src 'self'; frame-ancestors 'none';" 
 
 [[headers]]
   for = "/index.html"
