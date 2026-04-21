@@ -2,57 +2,12 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v9.2
+   Build: 2026-04-17-v9.3
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v9.2');
+console.log('OmenFi build: 2026-04-14-v9.3');
 'use strict';
 
-// ============================================
-// ON-SCREEN DEBUG PANEL (remove before launch)
-// ============================================
-(function() {
-  const logs = [];
-  const orig = { log: console.log, warn: console.warn, error: console.error };
-  function capture(type, args) {
-    const msg = Array.from(args).map(a => {
-      try { return typeof a === 'object' ? JSON.stringify(a).slice(0,200) : String(a); }
-      catch(e) { return String(a); }
-    }).join(' ');
-    logs.push({ type, msg, t: new Date().toLocaleTimeString() });
-    if (logs.length > 40) logs.shift();
-    updatePanel();
-  }
-  console.log  = function() { orig.log.apply(console, arguments);  capture('log',   arguments); };
-  console.warn = function() { orig.warn.apply(console, arguments); capture('warn',  arguments); };
-  console.error= function() { orig.error.apply(console,arguments); capture('error', arguments); };
-  window.onerror = function(msg, src, line) { capture('error', [msg + ' (line '+line+')']); return false; };
-  window.onunhandledrejection = function(e) { capture('error', ['Unhandled: ' + (e.reason?.message || e.reason)]); };
-
-  function updatePanel() {
-    const el = document.getElementById('_dbg');
-    if (!el) return;
-    el.innerHTML = logs.slice(-20).map(l =>
-      `<div style="color:${l.type==='error'?'#ff6b6b':l.type==='warn'?'#ffd93d':'#aaa'};font-size:10px;border-bottom:1px solid #222;padding:2px 0;word-break:break-all">[${l.t}] ${l.msg}</div>`
-    ).join('');
-    el.scrollTop = el.scrollHeight;
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const panel = document.createElement('div');
-    panel.id = '_dbg';
-    panel.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:220px;overflow-y:auto;background:#111;z-index:9999;padding:6px;display:none;font-family:monospace';
-    document.body.appendChild(panel);
-
-    const toggle = document.createElement('button');
-    toggle.textContent = '🔍 Debug';
-    toggle.style.cssText = 'position:fixed;bottom:0;right:0;z-index:10000;background:#333;color:#fff;border:none;padding:6px 10px;font-size:11px;opacity:0.7';
-    toggle.onclick = () => {
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-      updatePanel();
-    };
-    document.body.appendChild(toggle);
-  });
-})();
+// Production build — debug panel removed
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
 function sanitize(str) {
@@ -181,7 +136,8 @@ document.addEventListener('DOMContentLoaded', () => {
       restoreServerUnlocks(savedWallet).catch(() => {});
       refreshUnlockAllBar();
       const pu = sessionStorage.getItem('pu');
-      if (pu) { sessionStorage.removeItem('pu'); setTimeout(() => openUnlockModal(pu), 300); }
+      if (pu && ASSETS[pu]) { sessionStorage.removeItem('pu'); setTimeout(() => openUnlockModal(pu), 300); }
+      else if (pu) { sessionStorage.removeItem('pu'); } // invalid asset ID — discard
     };
 
     // Method 1: Poll for Phantom injection (handles async injection)
@@ -1963,7 +1919,8 @@ async function onWalletConnected(pubkey, provider) {
   await restoreServerUnlocks(pubkey);
   refreshUnlockAllBar();
   const pu = sessionStorage.getItem('pu');
-  if (pu) { sessionStorage.removeItem('pu'); renderConfirm(pu); }
+  if (pu && ASSETS[pu]) { sessionStorage.removeItem('pu'); renderConfirm(pu); }
+  else if (pu) { sessionStorage.removeItem('pu'); } // invalid — discard
   else renderConnected();
 }
 
@@ -2203,7 +2160,6 @@ async function sendSolPayment(assetId, lamports) {
       // Seed Vault Wallet — sign and send via MWA transact
       // CRITICAL: mwaTransact must be called with the pre-built transaction
       // The intent fires immediately, then we serialize inside the callback
-      console.log('mwaTransact type:', typeof window.mwaTransact, 'is function:', typeof window.mwaTransact === 'function');
       if (!window.mwaTransact || typeof window.mwaTransact !== 'function') {
         throw new Error('MWA transact not available — type: ' + typeof window.mwaTransact);
       }
@@ -2220,17 +2176,13 @@ async function sendSolPayment(assetId, lamports) {
             icon: 'icon-192.png',
           },
         });
-        console.log('Auth OK:', !!authResult?.accounts?.[0]);
 
         // Pass Transaction object directly — web3js wrapper handles serialization internally
-        console.log('Calling signAndSendTransactions with Transaction object...');
         const results = await mwaWallet.signAndSendTransactions({
           transactions: [transaction],
         });
-        console.log('Got results:', JSON.stringify(results)?.slice(0,80));
         // results is an array of signature strings e.g. ["5FL8L3254..."]
         const sig = Array.isArray(results) ? results[0] : results?.signatures?.[0];
-        console.log('Signature:', sig?.slice(0,20));
         return sig;
       });
 
@@ -2249,7 +2201,6 @@ async function sendSolPayment(assetId, lamports) {
       } else {
         throw new Error('Unexpected signature format: ' + typeof result);
       }
-      console.log('Final signature:', signature?.slice(0,20) + '...');
 
     } else {
       // Phantom — use existing signAndSendTransaction
