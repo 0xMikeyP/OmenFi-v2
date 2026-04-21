@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v9.0
+   Build: 2026-04-17-v9.1
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v9.0');
+console.log('OmenFi build: 2026-04-14-v9.1');
 'use strict';
 
 // ============================================
@@ -1785,13 +1785,13 @@ function closeModal(){
 }
 
 // ============================================
-// WALLET — Phantom + Seed Vault Wallet (Seeker)
+// WALLET — Phantom + Seeker Wallet (Solana Seeker)
 //
 // Phantom flow (Android/Seeker):
 //   Inside Phantom browser → window.solana injected → connect directly
 //   In Chrome → deep link opens OmenFi inside Phantom browser
 //
-// Seed Vault Wallet flow (Seeker):
+// Seeker Wallet flow (Solana Seeker device):
 //   Inside Solflare/Seed Vault browser → window.solflare injected → connect directly
 //   In Chrome → deep link opens OmenFi inside Solflare browser
 //
@@ -1842,8 +1842,8 @@ function renderConnect() {
           <path d="M56 96 L64 90 L72 96 L64 102 Z" fill="white"/>
         </svg>
         <div>
-          <b>Seed Vault Wallet</b>
-          <span>${solflareReady ? 'Ready to connect' : IS_ANDROID ? 'Opens in Seed Vault browser' : 'Solana Seeker'}</span>
+          <b>Seeker Wallet</b>
+          <span>${IS_ANDROID ? 'Solana Seeker · MWA' : 'Solana Seeker device'}</span>
         </div>
         <span style="margin-left:auto">→</span>
       </button>
