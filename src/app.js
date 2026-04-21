@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v9.1
+   Build: 2026-04-17-v9.2
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v9.1');
+console.log('OmenFi build: 2026-04-14-v9.2');
 'use strict';
 
 // ============================================
@@ -1213,7 +1213,7 @@ function renderOptimizer(opt, seasonality){
 
     let verdict = '';
     if (rowClass === 'skip-row') {
-      verdict = 'Closed positive only ' + upYears + ' of ' + totalYears + ' years — prices tend to be elevated here.';
+      verdict = 'Closed positive ' + upYears + ' of ' + totalYears + ' years — prices tend to be elevated here.';
     } else if (rowClass === 'boost-row') {
       verdict = 'Down ' + (totalYears - upYears) + ' of ' + totalYears + ' years — prices are typically cheaper here. Stack more.';
     } else {
