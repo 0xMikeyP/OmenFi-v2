@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v9.6
+   Build: 2026-04-17-v9.8
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v9.6');
+console.log('OmenFi build: 2026-04-14-v9.8');
 'use strict';
 
 // Production build — debug panel removed
@@ -2598,4 +2598,460 @@ function fmtCoins(n){
   if(!n||isNaN(n)) return '—';
   if(n>=1000) return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4});
   return n.toFixed(8);
+}
+
+// ============================================
+// DCA TRACKER
+// ============================================
+
+const TRACKER_STORAGE_KEY = 'omenfi_tracker_v1';
+const TRACKER_FREE_SLOTS   = 1;  // 1 free strategy
+const TRACKER_PAID_PRICE   = 0.05; // SOL per additional strategy
+
+// Load tracker data — localStorage first, cloud fallback
+function trackerLoad() {
+  try {
+    return JSON.parse(localStorage.getItem(TRACKER_STORAGE_KEY) || '{}');
+  } catch { return {}; }
+}
+
+// Save tracker data — localStorage immediately, cloud in background
+function trackerSave(data) {
+  // 1. Save locally right away — instant, no wait
+  try { localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(data)); } catch {}
+
+  // 2. Sync to cloud in background — don't await, don't block UI
+  if (state.wallet) {
+    const walletData = data[state.wallet];
+    if (walletData) {
+      trackerCloudSync(state.wallet, walletData).catch(() => {});
+    }
+  }
+}
+
+// Push data to Netlify Blobs (fire and forget)
+async function trackerCloudSync(walletAddress, walletData) {
+  try {
+    await fetch(`/.netlify/functions/tracker-sync?wallet=${walletAddress}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: walletData }),
+    });
+  } catch(e) {
+    // Silent fail — localStorage still has the data
+  }
+}
+
+// Load from cloud and merge with localStorage
+// Called on wallet connect — restores data on new device
+async function trackerCloudLoad(walletAddress) {
+  try {
+    const res = await fetch(`/.netlify/functions/tracker-sync?wallet=${walletAddress}`);
+    if (!res.ok) return null;
+    const { data } = await res.json();
+    if (!data) return null;
+
+    // Merge: cloud data is newer if its updatedAt is more recent
+    const local = trackerLoad();
+    const localData = local[walletAddress];
+    const cloudUpdated = data.updatedAt || 0;
+    const localUpdated = localData?.updatedAt || 0;
+
+    if (cloudUpdated > localUpdated) {
+      // Cloud is newer — update localStorage
+      local[walletAddress] = data;
+      try { localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(local)); } catch {}
+      console.log('Tracker: restored from cloud');
+      return data;
+    }
+
+    // Local is newer or same — push local to cloud to keep in sync
+    if (localData && localUpdated >= cloudUpdated) {
+      trackerCloudSync(walletAddress, localData).catch(() => {});
+    }
+    return localData || null;
+  } catch(e) {
+    return null; // Cloud unavailable — localStorage still works
+  }
+}
+
+// Fetch current live price for an asset
+async function fetchLivePrice(assetId) {
+  const sym = ASSETS[assetId]?.ccSym;
+  if (!sym) return null;
+  try {
+    const url = `https://min-api.cryptocompare.com/data/price?fsym=${sym}&tsyms=USD`;
+    const res = await fetch(url);
+    const j = await res.json();
+    return j.USD || null;
+  } catch { return null; }
+}
+
+// Get buys per period from frequency
+function getBuysPerMonth(frequency) {
+  if (frequency === 'daily')   return 30;
+  if (frequency === 'weekly')  return 4.33;
+  return 1;
+}
+
+// Calculate tracker stats from buy entries
+function calcTrackerStats(strategy, livePrice) {
+  const buys = strategy.buys || [];
+  if (!buys.length) return null;
+
+  const totalInvested = buys.reduce((s, b) => s + Number(b.amount), 0);
+  const totalCoins    = buys.reduce((s, b) => s + (Number(b.amount) / Number(b.price)), 0);
+  const avgEntry      = totalInvested / totalCoins;
+  const currentValue  = livePrice ? totalCoins * livePrice : null;
+  const pnl           = currentValue != null ? currentValue - totalInvested : null;
+  const pnlPct        = pnl != null && totalInvested > 0 ? (pnl / totalInvested) * 100 : null;
+
+  // Progress — buys completed vs expected
+  const startDate   = strategy.startDate ? new Date(strategy.startDate) : new Date(buys[0]?.date);
+  const now         = new Date();
+  const monthsElapsed = Math.max(1, (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth()) + 1);
+  const buysPerMonth  = getBuysPerMonth(strategy.frequency);
+  const expectedBuys  = Math.round(monthsElapsed * buysPerMonth);
+  const completedBuys = buys.length;
+  const progressPct   = Math.min(100, (completedBuys / Math.max(expectedBuys, 1)) * 100);
+
+  return { totalInvested, totalCoins, avgEntry, currentValue, pnl, pnlPct, progressPct, completedBuys, expectedBuys, monthsElapsed };
+}
+
+// Render the full tracker tab
+async function renderTracker() {
+  const el = $('tracker-content');
+  if (!el) return;
+
+  if (!state.wallet) {
+    el.innerHTML = `
+      <div class="tracker-setup" style="padding:60px 20px">
+        <div class="tracker-setup-icon">📊</div>
+        <h2>DCA Tracker</h2>
+        <p>Connect your wallet to start tracking your DCA strategy.</p>
+        <button class="run-btn" onclick="openWalletModal()" style="margin:0 auto;display:flex;gap:8px;padding:12px 28px">
+          <span>Connect Wallet</span><span>→</span>
+        </button>
+      </div>`;
+    return;
+  }
+
+  const data     = trackerLoad();
+  const wallet   = state.wallet;
+  const userData = data[wallet] || { strategies: [] };
+  const strategies = userData.strategies || [];
+
+  // Determine how many slots are available
+  const extraSlots = userData.extraSlots || 0;
+  const totalSlots  = TRACKER_FREE_SLOTS + extraSlots;
+  const hasSlots    = strategies.length < totalSlots;
+
+  // Active strategy (default to first)
+  const activeIdx = Math.max(0, Math.min(userData.activeIdx || 0, strategies.length - 1));
+  const active = strategies[activeIdx];
+
+  // Build strategy pills
+  const pills = strategies.map((s, i) => {
+    const a = ASSETS[s.assetId];
+    return `<button class="strat-pill ${i === activeIdx ? 'active' : ''}" onclick="trackerSetActive(${i})">
+      <img src="${a?.logo}" alt="${a?.symbol}">
+      <span>${a?.symbol} · $${s.amount}/${s.frequency === 'weekly' ? 'wk' : s.frequency === 'daily' ? 'day' : 'mo'}</span>
+    </button>`;
+  }).join('');
+
+  const addPill = hasSlots
+    ? `<button class="strat-pill strat-pill-add" onclick="trackerShowSetup()">+ New Strategy</button>`
+    : `<button class="strat-pill strat-pill-add" onclick="trackerUnlockSlot()">⚡ Unlock Strategy (0.05 SOL)</button>`;
+
+  if (!active) {
+    el.innerHTML = `
+      <div style="margin-bottom:16px">
+        <div class="tracker-title">DCA Tracker</div>
+        <div style="color:var(--t3);font-size:0.8rem;margin-top:4px">Track your DCA progress and stay accountable to your strategy.</div>
+      </div>
+      ${pills}${addPill ? `<div style="margin-top:8px">${addPill}</div>` : ''}
+      <div id="tracker-setup-form"></div>`;
+
+    if (hasSlots && !strategies.length) trackerShowSetupInline();
+    return;
+  }
+
+  // Fetch live price
+  el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--t3);font-family:var(--fm);font-size:0.72rem">Loading live price...</div>`;
+  const livePrice = await fetchLivePrice(active.assetId);
+  const stats = calcTrackerStats(active, livePrice);
+  const asset = ASSETS[active.assetId];
+
+  el.innerHTML = `
+    <!-- Header -->
+    <div class="tracker-header">
+      <div>
+        <div class="tracker-title">DCA Tracker</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+          <img src="${asset.logo}" style="width:28px;height:28px;border-radius:50%">
+          <div class="tracker-asset-name">${asset.name}</div>
+          <span style="font-family:var(--fm);font-size:0.65rem;color:var(--t3)">${asset.symbol} · $${active.amount}/${active.frequency === 'weekly' ? 'week' : active.frequency === 'daily' ? 'day' : 'month'}</span>
+        </div>
+      </div>
+      <button onclick="trackerDeleteStrategy(${activeIdx})" style="background:none;border:1px solid var(--b);border-radius:6px;padding:6px 12px;color:var(--t3);font-family:var(--fm);font-size:0.65rem;cursor:pointer">Delete Strategy</button>
+    </div>
+
+    <!-- Strategy pills -->
+    <div class="tracker-strategies">
+      ${pills}
+      ${addPill}
+    </div>
+
+    <!-- Stats -->
+    <div class="tracker-stats">
+      <div class="tstat">
+        <div class="tstat-label">Total Invested</div>
+        <div class="tstat-value">$${stats ? fmt(stats.totalInvested) : '—'}</div>
+        <div class="tstat-sub">${stats ? stats.completedBuys + ' buys logged' : 'No buys yet'}</div>
+      </div>
+      <div class="tstat">
+        <div class="tstat-label">Avg Entry Price</div>
+        <div class="tstat-value">$${stats ? fmt(stats.avgEntry) : '—'}</div>
+        <div class="tstat-sub">${livePrice ? 'Live: $' + fmt(livePrice) : 'Price unavailable'}</div>
+      </div>
+      <div class="tstat">
+        <div class="tstat-label">Current Value</div>
+        <div class="tstat-value ${stats?.pnl != null ? (stats.pnl >= 0 ? 'green' : 'red') : ''}">${stats?.currentValue != null ? '$' + fmt(stats.currentValue) : '—'}</div>
+        <div class="tstat-sub">${stats ? fmtCoins(stats.totalCoins) + ' ' + asset.symbol : ''}</div>
+      </div>
+      <div class="tstat">
+        <div class="tstat-label">P&L</div>
+        <div class="tstat-value ${stats?.pnl != null ? (stats.pnl >= 0 ? 'green' : 'red') : ''}">
+          ${stats?.pnl != null ? (stats.pnl >= 0 ? '+' : '') + '$' + fmt(Math.abs(stats.pnl)) : '—'}
+        </div>
+        <div class="tstat-sub">${stats?.pnlPct != null ? (stats.pnlPct >= 0 ? '+' : '') + stats.pnlPct.toFixed(1) + '% return' : ''}</div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="tracker-progress-wrap">
+      <div class="tprog-header">
+        <span class="tprog-label">Strategy Progress</span>
+        <span class="tprog-count">${stats ? stats.completedBuys + ' / ' + stats.expectedBuys + ' expected buys' : '0 buys'}</span>
+      </div>
+      <div class="tprog-bar-bg">
+        <div class="tprog-bar-fill" style="width:${stats ? stats.progressPct.toFixed(1) : 0}%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <span style="font-family:var(--fm);font-size:0.62rem;color:var(--t3)">Started ${active.startDate || (active.buys?.[0]?.date || 'today')}</span>
+        <span style="font-family:var(--fm);font-size:0.62rem;color:${stats && stats.completedBuys >= stats.expectedBuys ? 'var(--green)' : 'var(--accent)'}">
+          ${stats && stats.completedBuys >= stats.expectedBuys ? '✓ On track' : stats ? (stats.expectedBuys - stats.completedBuys) + ' buys behind' : ''}
+        </span>
+      </div>
+    </div>
+
+    <!-- Log a buy -->
+    <div class="tracker-log-wrap">
+      <div class="tlog-title">Log a Buy</div>
+      <div class="tlog-form">
+        <div class="tlog-field">
+          <label>Amount (USD)</label>
+          <input type="number" id="tlog-amount" placeholder="${active.amount}" min="0" step="any">
+        </div>
+        <div class="tlog-field">
+          <label>${asset.symbol} Price (USD)</label>
+          <input type="number" id="tlog-price" placeholder="${livePrice ? fmt(livePrice) : 'e.g. 65000'}" min="0" step="any" value="${livePrice ? Math.round(livePrice) : ''}">
+        </div>
+        <div class="tlog-field">
+          <label>Date (auto-filled)</label>
+          <input type="date" id="tlog-date" value="${new Date().toISOString().split('T')[0]}">
+        </div>
+      </div>
+      <button class="tlog-submit" onclick="trackerLogBuy(${activeIdx})">+ Log Buy</button>
+    </div>
+
+    <!-- Buy history -->
+    <div class="tracker-history">
+      <div class="thistory-header">
+        <span>Date</span>
+        <span>Amount</span>
+        <span>${asset.symbol} Price</span>
+        <span></span>
+      </div>
+      ${(active.buys || []).length === 0
+        ? `<div class="thistory-empty">No buys logged yet. Log your first buy above.</div>`
+        : [...(active.buys || [])].reverse().map((b, ri) => {
+            const realIdx = (active.buys.length - 1) - ri;
+            const coins = Number(b.amount) / Number(b.price);
+            return `<div class="thistory-row">
+              <span class="th-date">${b.date}</span>
+              <span class="th-amount">$${fmt(b.amount)} <span style="color:var(--t3);font-size:0.65rem;font-family:var(--fm)">(${fmtCoins(coins)} ${asset.symbol})</span></span>
+              <span class="th-price">$${fmt(b.price)}</span>
+              <button class="th-delete" onclick="trackerDeleteBuy(${activeIdx}, ${realIdx})" title="Delete">✕</button>
+            </div>`;
+          }).join('')
+      }
+    </div>
+
+    <div id="tracker-setup-form" style="margin-top:16px"></div>
+  `;
+}
+
+// Show setup form inline
+function trackerShowSetupInline() {
+  const el = $('tracker-setup-form');
+  if (!el) return;
+
+  const assetOptions = Object.entries(ASSETS)
+    .filter(([id]) => state.unlockedAssets.has(id) || id === 'bitcoin')
+    .map(([id, a]) => `<option value="${id}">${a.name} (${a.symbol})</option>`)
+    .join('');
+
+  el.innerHTML = `
+    <div class="tracker-log-wrap" style="margin-top:0">
+      <div class="tlog-title">Set Up Your Strategy</div>
+      <div class="tsetup-form">
+        <div class="tsetup-field">
+          <label>Asset to Track</label>
+          <select id="tsetup-asset">${assetOptions}</select>
+        </div>
+        <div class="tsetup-field">
+          <label>Buy Amount (USD)</label>
+          <input type="number" id="tsetup-amount" placeholder="100" min="1">
+        </div>
+        <div class="tsetup-field">
+          <label>Frequency</label>
+          <select id="tsetup-freq">
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="daily">Daily</option>
+          </select>
+        </div>
+        <div class="tsetup-field">
+          <label>Strategy Start Date</label>
+          <input type="date" id="tsetup-start" value="${new Date().toISOString().split('T')[0]}">
+        </div>
+        <button class="tlog-submit" onclick="trackerCreateStrategy()">Create Strategy</button>
+      </div>
+    </div>`;
+}
+
+function trackerShowSetup() {
+  const data = trackerLoad();
+  const wallet = state.wallet;
+  const userData = data[wallet] || { strategies: [] };
+  const extraSlots2 = userData.extraSlots || 0;
+  if (userData.strategies.length < TRACKER_FREE_SLOTS + extraSlots2) {
+    trackerShowSetupInline();
+  } else {
+    trackerUnlockSlot();
+  }
+}
+
+function trackerCreateStrategy() {
+  const asset     = $('tsetup-asset')?.value;
+  const amount    = parseFloat($('tsetup-amount')?.value);
+  const frequency = $('tsetup-freq')?.value;
+  const startDate = $('tsetup-start')?.value;
+
+  if (!asset || !amount || amount <= 0 || !frequency) {
+    alert('Please fill in all fields.');
+    return;
+  }
+
+  const data   = trackerLoad();
+  const wallet = state.wallet;
+  if (!data[wallet]) data[wallet] = { strategies: [] };
+
+  data[wallet].strategies.push({ assetId: asset, amount, frequency, startDate, buys: [] });
+  data[wallet].activeIdx = data[wallet].strategies.length - 1;
+  data[wallet].updatedAt = Date.now();
+  trackerSave(data);
+  renderTracker();
+}
+
+function trackerSetActive(idx) {
+  const data   = trackerLoad();
+  const wallet = state.wallet;
+  if (!data[wallet]) return;
+  data[wallet].activeIdx = idx;
+  trackerSave(data);
+  renderTracker();
+}
+
+function trackerLogBuy(stratIdx) {
+  const amount = parseFloat($('tlog-amount')?.value);
+  const price  = parseFloat($('tlog-price')?.value);
+  const date   = $('tlog-date')?.value || new Date().toISOString().split('T')[0];
+
+  if (!amount || amount <= 0 || !price || price <= 0) {
+    alert('Please enter a valid amount and price.');
+    return;
+  }
+
+  const data   = trackerLoad();
+  const wallet = state.wallet;
+  if (!data[wallet]?.strategies?.[stratIdx]) return;
+
+  data[wallet].strategies[stratIdx].buys.push({ amount, price, date });
+  // Sort buys by date
+  data[wallet].strategies[stratIdx].buys.sort((a, b) => a.date.localeCompare(b.date));
+  data[wallet].updatedAt = Date.now();
+  trackerSave(data);
+  renderTracker();
+}
+
+function trackerDeleteBuy(stratIdx, buyIdx) {
+  if (!confirm('Delete this buy entry?')) return;
+  const data   = trackerLoad();
+  const wallet = state.wallet;
+  if (!data[wallet]?.strategies?.[stratIdx]) return;
+  data[wallet].strategies[stratIdx].buys.splice(buyIdx, 1);
+  data[wallet].updatedAt = Date.now();
+  trackerSave(data);
+  renderTracker();
+}
+
+function trackerDeleteStrategy(stratIdx) {
+  if (!confirm('Delete this strategy and all logged buys?')) return;
+  const data   = trackerLoad();
+  const wallet = state.wallet;
+  if (!data[wallet]) return;
+  data[wallet].strategies.splice(stratIdx, 1);
+  data[wallet].activeIdx = 0;
+  data[wallet].updatedAt = Date.now();
+  trackerSave(data);
+  renderTracker();
+}
+
+async function trackerUnlockSlot() {
+  if (!state.wallet) { openWalletModal(); return; }
+  // Use existing payment system — assetId 'tracker-slot' with special handling
+  // For now show a simple confirmation modal
+  $('modal-inner').innerHTML = `
+    <div class="mi-icon" style="font-size:2rem">📊</div>
+    <div class="mi-title">Unlock Additional Strategy</div>
+    <div class="mi-sub" style="margin:12px 0">Pay <strong>0.05 SOL</strong> to track an additional DCA strategy.</div>
+    <button class="run-btn" id="tracker-pay-btn" style="width:100%;margin-top:8px"><span>Pay 0.05 SOL</span><span>→</span></button>
+    <button class="sec-btn" id="tracker-cancel-btn" style="margin-top:8px;width:100%">Cancel</button>
+  `;
+  $('modal-backdrop').style.display = 'flex';
+  $('tracker-pay-btn').addEventListener('click', async () => {
+    try {
+      $('tracker-pay-btn').disabled = true;
+      $('tracker-pay-btn').querySelector('span').textContent = 'Processing...';
+      const lamports = Math.round(0.05 * 1_000_000_000);
+      const signature = await sendSolPayment('tracker', lamports);
+      // Grant an extra slot
+      const data   = trackerLoad();
+      const wallet = state.wallet;
+      if (!data[wallet]) data[wallet] = { strategies: [] };
+      if (!data[wallet].extraSlots) data[wallet].extraSlots = 0;
+      data[wallet].extraSlots += 1;
+      trackerSave(data);
+      closeModal();
+      renderTracker();
+      setTimeout(trackerShowSetupInline, 100);
+    } catch(e) {
+      $('tracker-pay-btn').disabled = false;
+      $('tracker-pay-btn').querySelector('span').textContent = 'Pay 0.05 SOL';
+      alert('Payment failed: ' + e.message);
+    }
+  });
+  $('tracker-cancel-btn').addEventListener('click', closeModal);
 }
