@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v9.5
+   Build: 2026-04-17-v9.6
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v9.5');
+console.log('OmenFi build: 2026-04-14-v9.6');
 'use strict';
 
 // Production build — debug panel removed
@@ -2016,31 +2016,27 @@ async function doUnlockAll() {
     const verified = await verifyPaymentOnServer(signature, 'all', state.wallet);
     if (!verified.success) throw new Error(verified.error || 'Verification failed');
 
-    // Unlock all paid assets using the single verified token as proof
+    // Unlock all paid assets using the verified token
     const allAssets = Object.keys(ASSETS).filter(id => id !== 'bitcoin');
-    let anySuccess = false;
     for (const assetId of allAssets) {
-      if (state.unlockedAssets.has(assetId)) continue;
-      // Issue individual tokens derived from the bundle verification
       storeUnlockToken(assetId, verified.unlockToken);
       unlockAsset(assetId);
-      anySuccess = true;
     }
+    refreshUnlockAllBar();
 
-    if (anySuccess) {
-      // Show success
-      const modal = $('modal-inner');
-      if (modal) {
-        modal.innerHTML = `
-          <div class="mi-icon" style="color:var(--green);font-size:3rem">✓</div>
-          <div class="mi-title" style="color:var(--green)">All Assets Unlocked!</div>
-          <div class="mi-sub">You now have full access to all 11 crypto assets on OmenFi.</div>
-          <button class="run-btn" id="close-ok" style="width:100%;margin-top:16px"><span>Start Exploring</span><span>→</span></button>
-        `;
-        $('close-ok').addEventListener('click', closeModal);
-      }
-    } else {
-      throw new Error('Verification failed — please contact support with your tx signature: ' + signature);
+    // Always show success modal — payment verified on chain
+    const modal = $('modal-inner');
+    if (modal) {
+      modal.innerHTML = `
+        <div class="mi-icon" style="color:var(--green);font-size:3rem">✓</div>
+        <div class="mi-title" style="color:var(--green)">All Assets Unlocked!</div>
+        <div class="mi-sub" style="margin-top:8px">You now have lifetime access to all 11 crypto assets on OmenFi.</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin:16px 0;text-align:left">
+          ${allAssets.map(id => `<div style="font-family:var(--fm);font-size:0.72rem;color:var(--green);display:flex;align-items:center;gap:6px"><span>✓</span><span>${ASSETS[id].name} (${ASSETS[id].symbol})</span></div>`).join('')}
+        </div>
+        <button class="run-btn" id="close-ok" style="width:100%;margin-top:8px"><span>Start Exploring</span><span>→</span></button>
+      `;
+      $('close-ok').addEventListener('click', closeModal);
     }
 
   } catch (err) {
