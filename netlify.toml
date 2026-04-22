@@ -37,7 +37,7 @@
 [[rateLimit]]
   from = "/.netlify/functions/verify-payment"
   aggregate_by = ["ip"]
-  window_limit = 5
+  window_limit = 15
   window_size = 60
   action = "deny"
 
