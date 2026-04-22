@@ -61,3 +61,10 @@
   window_limit = 20
   window_size = 60
   action = "deny"
+
+[[rateLimit]]
+  from = "/.netlify/functions/tracker-sync"
+  aggregate_by = ["ip"]
+  window_limit = 30
+  window_size = 60
+  action = "deny"
