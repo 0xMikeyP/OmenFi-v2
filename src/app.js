@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v9.4
+   Build: 2026-04-17-v9.5
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v9.4');
+console.log('OmenFi build: 2026-04-14-v9.5');
 'use strict';
 
 // Production build — debug panel removed
@@ -838,6 +838,18 @@ function renderResults(r, asset, amount, freq, start, end, smartR){
     // Buys executed
     if ($('m-opt-buys')) $('m-opt-buys').textContent = (smartR.count || 0).toLocaleString();
 
+    // Difference in buys
+    const buysDiff = (smartR.count || 0) - r.count;
+    if ($('m-buys-diff')) {
+      if (buysDiff === 0) {
+        $('m-buys-diff').textContent = '—';
+        $('m-buys-diff').className = 'cg-diff muted';
+      } else {
+        $('m-buys-diff').textContent = (buysDiff > 0 ? '+' : '') + buysDiff;
+        $('m-buys-diff').className = 'cg-diff ' + (buysDiff > 0 ? 'pos' : 'neg');
+      }
+    }
+
   } else {
     // No optimized data — show dashes
     ['m-opt-value','m-opt-value-diff','m-opt-coins','m-coin-diff','m-opt-invested',
@@ -1074,9 +1086,11 @@ function renderScrubStats(idx) {
         '$'+fmt(smartVal),
         'Net: '+(smartProfit>=0?'+':'')+' $'+fmt(smartProfit)+(smartROI!=null?' ('+(smartROI>=0?'+':'')+smartROI.toFixed(1)+'%)':''));
 
-      html += card(diff>=0?'#00e87a':'#ff3a5c', 'Edge',
-        (diff>=0?'+ $':'- $')+fmt(Math.abs(diff)),
-        'from timing', true);
+      if (diff !== null) {
+        html += card(diff>=0?'#00e87a':'#ff3a5c', 'Timing Edge',
+          (diff>=0?'+ $':'- $')+fmt(Math.abs(diff)),
+          diff>=0 ? 'optimized outperforms' : 'std outperforms here', true);
+      }
     }
 
   } else {
@@ -1516,7 +1530,13 @@ async function loadCalendar(assetId){
 
 function buildCalendar(assetId,monthly,weeklyS,daily){
   const a=ASSETS[assetId];
-  $('cal-title-icon').textContent=a.icon;
+  // Use actual coin logo instead of text symbol
+  const calIconEl = $('cal-title-icon');
+  if (a.logo) {
+    calIconEl.innerHTML = `<img src="${a.logo}" alt="${a.symbol}" style="width:36px;height:36px;border-radius:50%;vertical-align:middle">`;
+  } else {
+    calIconEl.textContent = a.icon;
+  }
   $('cal-title-name').textContent=a.name;
   $('cal-title-sub').textContent=a.symbol+' — Signal Calendar';
   $('cal-data-range').textContent=daily.dates[0].slice(0,4)+' – '+daily.dates[daily.dates.length-1].slice(0,4)+' · '+(monthly[0]?.count||0)+'+ years of data';
@@ -1949,6 +1969,9 @@ async function doPayment(id) {
 
     if (btn) btn.querySelector('span').textContent = 'Verifying payment...';
 
+    // Small delay to ensure RPC has propagated the confirmed tx
+    await new Promise(r => setTimeout(r, 2000));
+
     // Verify on backend
     const verified = await verifyPaymentOnServer(signature, id, state.wallet);
 
@@ -1989,23 +2012,19 @@ async function doUnlockAll() {
 
     if (btn) btn.querySelector('span').textContent = 'Verifying payment...';
 
-    // Verify each asset against the server using the same signature
+    // Verify once with assetId='all' — single server call, no rate limit hit
+    const verified = await verifyPaymentOnServer(signature, 'all', state.wallet);
+    if (!verified.success) throw new Error(verified.error || 'Verification failed');
+
+    // Unlock all paid assets using the single verified token as proof
     const allAssets = Object.keys(ASSETS).filter(id => id !== 'bitcoin');
     let anySuccess = false;
-
     for (const assetId of allAssets) {
       if (state.unlockedAssets.has(assetId)) continue;
-      try {
-        const verified = await verifyPaymentOnServer(signature, assetId, state.wallet);
-        if (verified.success) {
-          storeUnlockToken(assetId, verified.unlockToken);
-          unlockAsset(assetId);
-          anySuccess = true;
-        }
-      } catch(e) {
-        // If verify fails for one asset, still try the rest
-        console.warn('Verify failed for', assetId, e);
-      }
+      // Issue individual tokens derived from the bundle verification
+      storeUnlockToken(assetId, verified.unlockToken);
+      unlockAsset(assetId);
+      anySuccess = true;
     }
 
     if (anySuccess) {
