@@ -869,16 +869,19 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 
 /* Row label — spans full width above each metric group */
 .cg-row-label-above {
-  padding: 10px 12px 3px;
+  padding: 10px 4px 3px;
   font-family: var(--fm);
-  font-size: 0.68rem;
+  font-size: clamp(0.55rem, 1.8vw, 0.68rem);
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--t2);
   background: var(--bg3);
   border-top: 1px solid var(--b);
   text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cg-row-label-above:first-of-type,
 .compare-grid > .cg-row-label-above:nth-child(4) { border-top: none; }
