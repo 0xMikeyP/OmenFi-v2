@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v9.8
+   Build: 2026-04-17-v9.9
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v9.8');
+console.log('OmenFi build: 2026-04-14-v9.9');
 'use strict';
 
 // Production build — debug panel removed
@@ -288,11 +288,16 @@ function clearPresets() {
 
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab===tab));
-  // Disable all panel animations during tab switch — prevents jank spike on mobile
   document.body.classList.add('no-anim');
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id==='tab-'+tab));
-  // Re-enable after a single frame
   requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('no-anim')));
+  if (tab === 'tracker') {
+    if (state.wallet) {
+      trackerCloudLoad(state.wallet).then(() => renderTracker()).catch(() => renderTracker());
+    } else {
+      renderTracker();
+    }
+  }
 }
 
 function onAssetClick(btn, ctx) {
@@ -2723,83 +2728,96 @@ async function renderTracker() {
   const el = $('tracker-content');
   if (!el) return;
 
+  // Not connected
   if (!state.wallet) {
     el.innerHTML = `
-      <div class="tracker-setup" style="padding:60px 20px">
-        <div class="tracker-setup-icon">📊</div>
-        <h2>DCA Tracker</h2>
-        <p>Connect your wallet to start tracking your DCA strategy.</p>
-        <button class="run-btn" onclick="openWalletModal()" style="margin:0 auto;display:flex;gap:8px;padding:12px 28px">
+      <div style="max-width:480px;margin:60px auto;text-align:center;padding:20px">
+        <div style="font-size:3rem;margin-bottom:16px">📊</div>
+        <div style="font-size:1.3rem;font-weight:700;margin-bottom:8px">DCA Tracker</div>
+        <div style="color:var(--t3);font-size:0.85rem;margin-bottom:24px;line-height:1.6">
+          Track your DCA buys, monitor your average entry price, and stay accountable to your strategy.
+        </div>
+        <button class="run-btn" id="tracker-connect-btn" style="margin:0 auto;display:flex;gap:8px;padding:12px 28px">
           <span>Connect Wallet</span><span>→</span>
         </button>
       </div>`;
+    $('tracker-connect-btn').addEventListener('click', openWalletModal);
     return;
   }
 
-  const data     = trackerLoad();
-  const wallet   = state.wallet;
-  const userData = data[wallet] || { strategies: [] };
+  const data       = trackerLoad();
+  const wallet     = state.wallet;
+  const userData   = data[wallet] || { strategies: [] };
   const strategies = userData.strategies || [];
-
-  // Determine how many slots are available
   const extraSlots = userData.extraSlots || 0;
-  const totalSlots  = TRACKER_FREE_SLOTS + extraSlots;
-  const hasSlots    = strategies.length < totalSlots;
+  const totalSlots = 1 + extraSlots;
+  const hasSlots   = strategies.length < totalSlots;
+  const activeIdx  = Math.min(userData.activeIdx || 0, Math.max(0, strategies.length - 1));
+  const active     = strategies[activeIdx];
 
-  // Active strategy (default to first)
-  const activeIdx = Math.max(0, Math.min(userData.activeIdx || 0, strategies.length - 1));
-  const active = strategies[activeIdx];
-
-  // Build strategy pills
+  // Strategy pills
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const pills = strategies.map((s, i) => {
-    const a = ASSETS[s.assetId];
+    const a = ASSETS[s.assetId] || {};
     return `<button class="strat-pill ${i === activeIdx ? 'active' : ''}" onclick="trackerSetActive(${i})">
-      <img src="${a?.logo}" alt="${a?.symbol}">
-      <span>${a?.symbol} · $${s.amount}/${s.frequency === 'weekly' ? 'wk' : s.frequency === 'daily' ? 'day' : 'mo'}</span>
+      <img src="${a.logo || ''}" alt="${a.symbol || ''}">
+      <span>${a.symbol} · $${s.amount}/${s.frequency === 'weekly' ? 'wk' : s.frequency === 'daily' ? 'day' : 'mo'}</span>
     </button>`;
   }).join('');
 
-  const addPill = hasSlots
-    ? `<button class="strat-pill strat-pill-add" onclick="trackerShowSetup()">+ New Strategy</button>`
-    : `<button class="strat-pill strat-pill-add" onclick="trackerUnlockSlot()">⚡ Unlock Strategy (0.05 SOL)</button>`;
+  // Always show "Buy More Trackers" button — disables if slot available
+  const buyMoreBtn = `<button class="strat-pill strat-pill-add" onclick="trackerUnlockSlot()" style="${hasSlots?'opacity:0.4;cursor:default':''}">
+    ${hasSlots ? '+ New Strategy (free slot available)' : '⚡ Buy More Trackers (0.05 SOL)'}
+  </button>`;
 
+  // New strategy button (only if slot available)
+  const newStratBtn = hasSlots ? `<button class="strat-pill strat-pill-add" onclick="trackerShowSetupInline()" style="border-color:var(--accent);color:var(--accent)">+ New Strategy</button>` : '';
+
+  // No strategies yet — show setup
   if (!active) {
     el.innerHTML = `
-      <div style="margin-bottom:16px">
-        <div class="tracker-title">DCA Tracker</div>
-        <div style="color:var(--t3);font-size:0.8rem;margin-top:4px">Track your DCA progress and stay accountable to your strategy.</div>
+      <div style="margin-bottom:20px">
+        <div style="font-family:var(--fm);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--t3)">DCA Tracker</div>
+        <div style="font-size:1.2rem;font-weight:700;margin-top:4px">Track Your Strategy</div>
+        <div style="color:var(--t3);font-size:0.8rem;margin-top:4px">Set up a strategy below — no backtest needed.</div>
       </div>
-      ${pills}${addPill ? `<div style="margin-top:8px">${addPill}</div>` : ''}
-      <div id="tracker-setup-form"></div>`;
-
-    if (hasSlots && !strategies.length) trackerShowSetupInline();
+      <div id="tracker-setup-form"></div>
+      <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap">${buyMoreBtn}</div>`;
+    trackerShowSetupInline();
     return;
   }
 
   // Fetch live price
-  el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--t3);font-family:var(--fm);font-size:0.72rem">Loading live price...</div>`;
-  const livePrice = await fetchLivePrice(active.assetId);
-  const stats = calcTrackerStats(active, livePrice);
-  const asset = ASSETS[active.assetId];
+  el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--t3);font-family:var(--fm);font-size:0.72rem;letter-spacing:0.08em">LOADING LIVE PRICE...</div>`;
+  const livePrice = await fetchLivePrice(active.assetId).catch(() => null);
+  const stats  = calcTrackerStats(active, livePrice);
+  const asset  = ASSETS[active.assetId] || {};
+  const buys   = active.buys || [];
 
   el.innerHTML = `
     <!-- Header -->
     <div class="tracker-header">
       <div>
         <div class="tracker-title">DCA Tracker</div>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
-          <img src="${asset.logo}" style="width:28px;height:28px;border-radius:50%">
+        <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+          <img src="${asset.logo}" style="width:30px;height:30px;border-radius:50%">
           <div class="tracker-asset-name">${asset.name}</div>
-          <span style="font-family:var(--fm);font-size:0.65rem;color:var(--t3)">${asset.symbol} · $${active.amount}/${active.frequency === 'weekly' ? 'week' : active.frequency === 'daily' ? 'day' : 'month'}</span>
+          <span style="font-family:var(--fm);font-size:0.62rem;color:var(--t3);background:var(--bg3);border:1px solid var(--b);padding:3px 8px;border-radius:10px">
+            $${active.amount} / ${active.frequency}
+          </span>
         </div>
       </div>
-      <button onclick="trackerDeleteStrategy(${activeIdx})" style="background:none;border:1px solid var(--b);border-radius:6px;padding:6px 12px;color:var(--t3);font-family:var(--fm);font-size:0.65rem;cursor:pointer">Delete Strategy</button>
+      <button onclick="trackerDeleteStrategy(${activeIdx})"
+        style="background:none;border:1px solid var(--b);border-radius:6px;padding:6px 12px;color:var(--t3);font-family:var(--fm);font-size:0.62rem;cursor:pointer;letter-spacing:0.06em">
+        Delete
+      </button>
     </div>
 
-    <!-- Strategy pills -->
+    <!-- Strategy pills + buy more -->
     <div class="tracker-strategies">
       ${pills}
-      ${addPill}
+      ${newStratBtn}
+      ${buyMoreBtn}
     </div>
 
     <!-- Stats -->
@@ -2816,11 +2834,13 @@ async function renderTracker() {
       </div>
       <div class="tstat">
         <div class="tstat-label">Current Value</div>
-        <div class="tstat-value ${stats?.pnl != null ? (stats.pnl >= 0 ? 'green' : 'red') : ''}">${stats?.currentValue != null ? '$' + fmt(stats.currentValue) : '—'}</div>
+        <div class="tstat-value ${stats?.pnl != null ? (stats.pnl >= 0 ? 'green' : 'red') : ''}">
+          ${stats?.currentValue != null ? '$' + fmt(stats.currentValue) : '—'}
+        </div>
         <div class="tstat-sub">${stats ? fmtCoins(stats.totalCoins) + ' ' + asset.symbol : ''}</div>
       </div>
       <div class="tstat">
-        <div class="tstat-label">P&L</div>
+        <div class="tstat-label">Total P&L</div>
         <div class="tstat-value ${stats?.pnl != null ? (stats.pnl >= 0 ? 'green' : 'red') : ''}">
           ${stats?.pnl != null ? (stats.pnl >= 0 ? '+' : '') + '$' + fmt(Math.abs(stats.pnl)) : '—'}
         </div>
@@ -2828,19 +2848,21 @@ async function renderTracker() {
       </div>
     </div>
 
-    <!-- Progress bar -->
+    <!-- Progress -->
     <div class="tracker-progress-wrap">
       <div class="tprog-header">
-        <span class="tprog-label">Strategy Progress</span>
-        <span class="tprog-count">${stats ? stats.completedBuys + ' / ' + stats.expectedBuys + ' expected buys' : '0 buys'}</span>
+        <span class="tprog-label">Buy Progress</span>
+        <span class="tprog-count">${stats ? stats.completedBuys + ' of ~' + stats.expectedBuys + ' expected buys' : '0 buys'}</span>
       </div>
       <div class="tprog-bar-bg">
-        <div class="tprog-bar-fill" style="width:${stats ? stats.progressPct.toFixed(1) : 0}%"></div>
+        <div class="tprog-bar-fill" style="width:${stats ? Math.min(100, stats.progressPct).toFixed(1) : 0}%"></div>
       </div>
-      <div style="display:flex;justify-content:space-between;margin-top:6px">
-        <span style="font-family:var(--fm);font-size:0.62rem;color:var(--t3)">Started ${active.startDate || (active.buys?.[0]?.date || 'today')}</span>
-        <span style="font-family:var(--fm);font-size:0.62rem;color:${stats && stats.completedBuys >= stats.expectedBuys ? 'var(--green)' : 'var(--accent)'}">
-          ${stats && stats.completedBuys >= stats.expectedBuys ? '✓ On track' : stats ? (stats.expectedBuys - stats.completedBuys) + ' buys behind' : ''}
+      <div style="display:flex;justify-content:space-between;margin-top:8px">
+        <span style="font-family:var(--fm);font-size:0.62rem;color:var(--t3)">
+          Started ${active.startDate || (buys[0]?.date || '—')}
+        </span>
+        <span style="font-family:var(--fm);font-size:0.62rem;font-weight:700;color:${stats && stats.completedBuys >= stats.expectedBuys ? 'var(--green)' : 'var(--accent)'}">
+          ${stats ? (stats.completedBuys >= stats.expectedBuys ? '✓ On track' : (stats.expectedBuys - stats.completedBuys) + ' buys behind schedule') : ''}
         </span>
       </div>
     </div>
@@ -2850,39 +2872,43 @@ async function renderTracker() {
       <div class="tlog-title">Log a Buy</div>
       <div class="tlog-form">
         <div class="tlog-field">
-          <label>Amount (USD)</label>
-          <input type="number" id="tlog-amount" placeholder="${active.amount}" min="0" step="any">
+          <label>Amount Spent (USD)</label>
+          <input type="number" id="tlog-amount" placeholder="$${active.amount}" min="0" step="any">
         </div>
         <div class="tlog-field">
-          <label>${asset.symbol} Price (USD)</label>
-          <input type="number" id="tlog-price" placeholder="${livePrice ? fmt(livePrice) : 'e.g. 65000'}" min="0" step="any" value="${livePrice ? Math.round(livePrice) : ''}">
+          <label>${asset.symbol} Price Paid</label>
+          <input type="number" id="tlog-price" min="0" step="any"
+            value="${livePrice ? Math.round(livePrice) : ''}"
+            placeholder="${livePrice ? '$' + fmt(livePrice) : 'e.g. 65000'}">
         </div>
         <div class="tlog-field">
-          <label>Date (auto-filled)</label>
+          <label>Date</label>
           <input type="date" id="tlog-date" value="${new Date().toISOString().split('T')[0]}">
         </div>
       </div>
-      <button class="tlog-submit" onclick="trackerLogBuy(${activeIdx})">+ Log Buy</button>
+      <button class="tlog-submit" onclick="trackerLogBuy(${activeIdx})">+ Log This Buy</button>
     </div>
 
-    <!-- Buy history -->
+    <!-- History -->
     <div class="tracker-history">
       <div class="thistory-header">
         <span>Date</span>
-        <span>Amount</span>
+        <span>USD Spent</span>
         <span>${asset.symbol} Price</span>
         <span></span>
       </div>
-      ${(active.buys || []).length === 0
-        ? `<div class="thistory-empty">No buys logged yet. Log your first buy above.</div>`
-        : [...(active.buys || [])].reverse().map((b, ri) => {
-            const realIdx = (active.buys.length - 1) - ri;
+      ${buys.length === 0
+        ? `<div class="thistory-empty">No buys logged yet. Use the form above to log your first buy.</div>`
+        : [...buys].reverse().map((b, ri) => {
+            const realIdx = buys.length - 1 - ri;
             const coins = Number(b.amount) / Number(b.price);
             return `<div class="thistory-row">
               <span class="th-date">${b.date}</span>
-              <span class="th-amount">$${fmt(b.amount)} <span style="color:var(--t3);font-size:0.65rem;font-family:var(--fm)">(${fmtCoins(coins)} ${asset.symbol})</span></span>
+              <span class="th-amount">$${fmt(b.amount)}
+                <span style="color:var(--t3);font-size:0.62rem;font-family:var(--fm)"> · ${fmtCoins(coins)} ${asset.symbol}</span>
+              </span>
               <span class="th-price">$${fmt(b.price)}</span>
-              <button class="th-delete" onclick="trackerDeleteBuy(${activeIdx}, ${realIdx})" title="Delete">✕</button>
+              <button class="th-delete" onclick="trackerDeleteBuy(${activeIdx},${realIdx})" title="Delete">✕</button>
             </div>`;
           }).join('')
       }
@@ -2891,6 +2917,7 @@ async function renderTracker() {
     <div id="tracker-setup-form" style="margin-top:16px"></div>
   `;
 }
+
 
 // Show setup form inline
 function trackerShowSetupInline() {
