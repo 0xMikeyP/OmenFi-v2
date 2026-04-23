@@ -1563,9 +1563,19 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 }
 .tprog-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), #ff3a5c);
+  /* Full-spectrum gradient: the bar reveals more of it as progress increases */
+  background: linear-gradient(90deg,
+    #ff3a5c 0%,
+    #ff6b35 20%,
+    #ff8c2a 35%,
+    #f5d020 55%,
+    #a8e063 75%,
+    #00e87a 100%
+  );
+  background-size: 100vw 100%;
+  background-position: 0 0;
   border-radius: 4px;
-  transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+  transition: width 0.7s cubic-bezier(0.4,0,0.2,1);
 }
 .tprog-months {
   display: flex;
@@ -1663,7 +1673,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 }
 .thistory-header {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto;
+  grid-template-columns: 90px 70px 1fr 28px;
   padding: 8px 14px;
   font-family: var(--fm);
   font-size: 0.58rem;
@@ -1675,17 +1685,19 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 }
 .thistory-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto;
-  padding: 10px 14px;
+  grid-template-columns: 90px 70px 1fr 28px;
+  padding: 9px 14px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
   align-items: center;
   transition: background 0.1s;
+  min-height: 0;
 }
 .thistory-row:last-child { border-bottom: none; }
 .thistory-row:hover { background: rgba(255,255,255,0.03); }
-.th-date { font-family: var(--fm); font-size: 0.72rem; color: var(--t2); }
-.th-amount { font-family: var(--fd); font-size: 0.85rem; font-weight: 600; color: var(--text); }
-.th-price  { font-family: var(--fm); font-size: 0.72rem; color: var(--t3); }
+.th-date   { font-family: var(--fm); font-size: 0.72rem; color: var(--t2); white-space: nowrap; }
+.th-amount { font-family: var(--fd); font-size: 0.82rem; font-weight: 600; color: var(--text); white-space: nowrap; }
+.th-price  { font-family: var(--fm); font-size: 0.72rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.th-coins  { font-size: 0.62rem; color: var(--t3); margin-left: 4px; }
 .th-delete {
   background: none;
   border: none;
