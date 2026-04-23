@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v10.5
+   Build: 2026-04-17-v10.6
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v10.5');
+console.log('OmenFi build: 2026-04-14-v10.6');
 'use strict';
 
 // Production build — debug panel removed
@@ -2718,16 +2718,18 @@ function calcTrackerStats(strategy, livePrice) {
   const pnl           = currentValue != null ? currentValue - totalInvested : null;
   const pnlPct        = pnl != null && totalInvested > 0 ? (pnl / totalInvested) * 100 : null;
 
-  // Progress — buys completed vs expected
-  const startDate   = strategy.startDate ? new Date(strategy.startDate) : new Date(buys[0]?.date);
-  const now         = new Date();
-  const monthsElapsed = Math.max(1, (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth()) + 1);
-  const buysPerMonth  = getBuysPerMonth(strategy.frequency);
-  const expectedBuys  = Math.round(monthsElapsed * buysPerMonth);
+  // Progress — dollar amount invested vs expected dollar amount by now
+  // e.g. $5 actual vs $100/wk * 4.33 weeks/mo * months = expected
+  const startDate     = strategy.startDate ? new Date(strategy.startDate) : new Date(buys[0]?.date || Date.now());
+  const now           = new Date();
+  const daysElapsed   = Math.max(1, (now - startDate) / (1000 * 60 * 60 * 24));
+  const buysPerDay    = strategy.frequency === 'daily' ? 1 : strategy.frequency === 'weekly' ? 1/7 : 1/30.44;
+  const expectedBuys  = Math.max(1, daysElapsed * buysPerDay);
+  const expectedDollars = expectedBuys * strategy.amount;
   const completedBuys = buys.length;
-  const progressPct   = Math.min(100, (completedBuys / Math.max(expectedBuys, 1)) * 100);
+  const progressPct   = Math.min(100, (totalInvested / expectedDollars) * 100);
 
-  return { totalInvested, totalCoins, avgEntry, currentValue, pnl, pnlPct, progressPct, completedBuys, expectedBuys, monthsElapsed };
+  return { totalInvested, totalCoins, avgEntry, currentValue, pnl, pnlPct, progressPct, completedBuys, expectedBuys: Math.round(expectedBuys), expectedDollars, monthsElapsed: Math.ceil(daysElapsed/30.44) };
 }
 
 // Render the full tracker tab
@@ -2868,15 +2870,10 @@ async function renderTracker() {
     <div class="tracker-progress-wrap">
       <div class="tprog-header">
         <span class="tprog-label">Buy Progress</span>
-        <span class="tprog-count">${stats ? stats.completedBuys + ' of ~' + stats.expectedBuys + ' expected buys' : '0 buys'}</span>
+        <span class="tprog-count">${stats ? '$' + fmt(stats.totalInvested) + ' of ~$' + fmt(stats.expectedDollars) + ' expected' : '0 invested'}</span>
       </div>
       <div class="tprog-bar-bg">
-        <div class="tprog-bar-fill" style="width:${stats ? Math.min(100, stats.progressPct).toFixed(1) : 0}%;background:${
-          !stats || stats.progressPct < 25 ? 'linear-gradient(90deg,#ff3a5c,#ff6b35)' :
-          stats.progressPct < 50 ? 'linear-gradient(90deg,#ff8c2a,#ffb347)' :
-          stats.progressPct < 75 ? 'linear-gradient(90deg,#f5d020,#f0a500)' :
-          'linear-gradient(90deg,#00e87a,#00c060)'
-        }"></div>
+        <div class="tprog-bar-fill" style="width:${stats ? Math.min(100, stats.progressPct).toFixed(1) : 0}%"></div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:8px">
         <span style="font-family:var(--fm);font-size:0.62rem;color:var(--t3)">
@@ -2923,12 +2920,11 @@ async function renderTracker() {
         : [...buys].reverse().map((b, ri) => {
             const realIdx = buys.length - 1 - ri;
             const coins = Number(b.amount) / Number(b.price);
+            const coinsDisplay = coins >= 1 ? coins.toFixed(4) : coins >= 0.001 ? coins.toFixed(6) : coins.toFixed(8);
             return `<div class="thistory-row">
               <span class="th-date">${b.date}</span>
-              <span class="th-amount">$${fmt(b.amount)}
-                <span style="color:var(--t3);font-size:0.62rem;font-family:var(--fm)"> · ${fmtCoins(coins)} ${asset.symbol}</span>
-              </span>
-              <span class="th-price">$${fmt(b.price)}</span>
+              <span class="th-amount">$${fmt(b.amount)}</span>
+              <span class="th-price">$${fmt(b.price)} <span class="th-coins">${coinsDisplay} ${asset.symbol}</span></span>
               <button class="th-delete" data-strat="${activeIdx}" data-buy="${realIdx}" title="Delete">✕</button>
             </div>`;
           }).join('')
