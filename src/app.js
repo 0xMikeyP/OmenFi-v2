@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v10.3
+   Build: 2026-04-17-v10.4
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v10.3');
+console.log('OmenFi build: 2026-04-14-v10.4');
 'use strict';
 
 // Production build — debug panel removed
@@ -2830,16 +2830,11 @@ async function renderTracker() {
     </div>
 
     <!-- Stats -->
-    <div class="tracker-stats">
+    <div class="tracker-stats" style="grid-template-columns:repeat(2,1fr)">
       <div class="tstat">
         <div class="tstat-label">Total Invested</div>
         <div class="tstat-value">$${stats ? fmt(stats.totalInvested) : '—'}</div>
         <div class="tstat-sub">${stats ? stats.completedBuys + ' buys logged' : 'No buys yet'}</div>
-      </div>
-      <div class="tstat">
-        <div class="tstat-label">Avg Entry Price</div>
-        <div class="tstat-value">$${stats ? fmt(stats.avgEntry) : '—'}</div>
-        <div class="tstat-sub">${livePrice ? 'Live: $' + fmt(livePrice) : 'Price unavailable'}</div>
       </div>
       <div class="tstat">
         <div class="tstat-label">Current Value</div>
@@ -2849,11 +2844,23 @@ async function renderTracker() {
         <div class="tstat-sub">${stats ? fmtCoins(stats.totalCoins) + ' ' + asset.symbol : ''}</div>
       </div>
       <div class="tstat">
-        <div class="tstat-label">Total P&L</div>
-        <div class="tstat-value ${stats?.pnl != null ? (stats.pnl >= 0 ? 'green' : 'red') : ''}">
-          ${stats?.pnl != null ? (stats.pnl >= 0 ? '+' : '') + '$' + fmt(Math.abs(stats.pnl)) : '—'}
+        <div class="tstat-label">Avg Entry Price</div>
+        <div class="tstat-value">$${stats ? fmt(stats.avgEntry) : '—'}</div>
+        <div class="tstat-sub" style="${livePrice && stats && livePrice < stats.avgEntry ? 'color:var(--red)' : 'color:var(--green)'}">
+          ${livePrice ? (livePrice < (stats?.avgEntry || 0) ? '▼ Below avg — DCA now' : '▲ Above avg — on track') : ''}
         </div>
-        <div class="tstat-sub">${stats?.pnlPct != null ? (stats.pnlPct >= 0 ? '+' : '') + stats.pnlPct.toFixed(1) + '% return' : ''}</div>
+      </div>
+      <div class="tstat" style="border-color:${livePrice ? 'rgba(255,140,42,0.3)' : 'var(--b)'}">
+        <div class="tstat-label">Current Price</div>
+        <div class="tstat-value" style="color:var(--accent)">${livePrice ? '$' + fmt(livePrice) : '—'}</div>
+        <div class="tstat-sub">Live ${asset.symbol} price</div>
+      </div>
+      <div class="tstat" style="grid-column:span 2">
+        <div class="tstat-label">Total P&L</div>
+        <div class="tstat-value" style="font-size:clamp(1.1rem,4vw,1.6rem);${stats?.pnl != null ? (stats.pnl >= 0 ? 'color:var(--green)' : 'color:var(--red)') : ''}">
+          ${stats?.pnl != null ? (stats.pnl >= 0 ? '+ $' : '- $') + fmt(Math.abs(stats.pnl)) : '—'}
+        </div>
+        <div class="tstat-sub">${stats?.pnlPct != null ? (stats.pnlPct >= 0 ? '+' : '') + stats.pnlPct.toFixed(2) + '% return on $' + fmt(stats.totalInvested) + ' invested' : ''}</div>
       </div>
     </div>
 
