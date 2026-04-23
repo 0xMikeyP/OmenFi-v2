@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v10.1
+   Build: 2026-04-17-v10.2
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v10.1');
+console.log('OmenFi build: 2026-04-14-v10.2');
 'use strict';
 
 // Production build — debug panel removed
@@ -2962,9 +2962,10 @@ function trackerShowSetupInline() {
           <label>Strategy Start Date</label>
           <input type="date" id="tsetup-start" value="${new Date().toISOString().split('T')[0]}">
         </div>
-        <button class="tlog-submit" onclick="trackerCreateStrategy()">Create Strategy</button>
+        <button class="tlog-submit" id="tracker-create-btn">Create Strategy</button>
       </div>
     </div>`;
+  document.getElementById('tracker-create-btn').addEventListener('click', trackerCreateStrategy);
 }
 
 function trackerShowSetup() {
