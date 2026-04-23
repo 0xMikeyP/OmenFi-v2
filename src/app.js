@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v9.9
+   Build: 2026-04-17-v10.1
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v9.9');
+console.log('OmenFi build: 2026-04-14-v10.1');
 'use strict';
 
 // Production build — debug panel removed
@@ -1947,6 +1947,13 @@ async function onWalletConnected(pubkey, provider) {
   if (pu && ASSETS[pu]) { sessionStorage.removeItem('pu'); renderConfirm(pu); }
   else if (pu) { sessionStorage.removeItem('pu'); } // invalid — discard
   else renderConnected();
+
+  // If tracker tab is currently active, re-render it now that wallet is connected
+  const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
+  if (activeTab === 'tracker') {
+    closeModal();
+    trackerCloudLoad(pubkey).then(() => renderTracker()).catch(() => renderTracker());
+  }
 }
 
 // Legacy compat
@@ -2759,19 +2766,19 @@ async function renderTracker() {
   const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const pills = strategies.map((s, i) => {
     const a = ASSETS[s.assetId] || {};
-    return `<button class="strat-pill ${i === activeIdx ? 'active' : ''}" onclick="trackerSetActive(${i})">
+    return `<button class="strat-pill ${i === activeIdx ? 'active' : ''}" data-strat-idx="${i}">
       <img src="${a.logo || ''}" alt="${a.symbol || ''}">
       <span>${a.symbol} · $${s.amount}/${s.frequency === 'weekly' ? 'wk' : s.frequency === 'daily' ? 'day' : 'mo'}</span>
     </button>`;
   }).join('');
 
-  // Always show "Buy More Trackers" button — disables if slot available
-  const buyMoreBtn = `<button class="strat-pill strat-pill-add" onclick="trackerUnlockSlot()" style="${hasSlots?'opacity:0.4;cursor:default':''}">
-    ${hasSlots ? '+ New Strategy (free slot available)' : '⚡ Buy More Trackers (0.05 SOL)'}
-  </button>`;
+  // "New Strategy" — only shows when free slot available
+  const newStratBtn = hasSlots
+    ? `<button class="strat-pill strat-pill-add" id="tracker-new-btn" style="border-color:var(--accent);color:var(--accent)">+ New Strategy</button>`
+    : '';
 
-  // New strategy button (only if slot available)
-  const newStratBtn = hasSlots ? `<button class="strat-pill strat-pill-add" onclick="trackerShowSetupInline()" style="border-color:var(--accent);color:var(--accent)">+ New Strategy</button>` : '';
+  // "Buy More Trackers" — always visible, only clickable when no free slot
+  const buyMoreBtn = `<button class="strat-pill strat-pill-add" id="tracker-buy-btn">⚡ Buy More Trackers — 0.05 SOL</button>`;
 
   // No strategies yet — show setup
   if (!active) {
@@ -2783,6 +2790,8 @@ async function renderTracker() {
       </div>
       <div id="tracker-setup-form"></div>
       <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap">${buyMoreBtn}</div>`;
+    // Wire buttons
+    document.getElementById('tracker-buy-btn')?.addEventListener('click', trackerUnlockSlot);
     trackerShowSetupInline();
     return;
   }
@@ -2807,7 +2816,7 @@ async function renderTracker() {
           </span>
         </div>
       </div>
-      <button onclick="trackerDeleteStrategy(${activeIdx})"
+      <button id="tracker-del-strat-btn"
         style="background:none;border:1px solid var(--b);border-radius:6px;padding:6px 12px;color:var(--t3);font-family:var(--fm);font-size:0.62rem;cursor:pointer;letter-spacing:0.06em">
         Delete
       </button>
@@ -2886,7 +2895,7 @@ async function renderTracker() {
           <input type="date" id="tlog-date" value="${new Date().toISOString().split('T')[0]}">
         </div>
       </div>
-      <button class="tlog-submit" onclick="trackerLogBuy(${activeIdx})">+ Log This Buy</button>
+      <button class="tlog-submit" id="tlog-submit-btn">+ Log This Buy</button>
     </div>
 
     <!-- History -->
@@ -2908,7 +2917,7 @@ async function renderTracker() {
                 <span style="color:var(--t3);font-size:0.62rem;font-family:var(--fm)"> · ${fmtCoins(coins)} ${asset.symbol}</span>
               </span>
               <span class="th-price">$${fmt(b.price)}</span>
-              <button class="th-delete" onclick="trackerDeleteBuy(${activeIdx},${realIdx})" title="Delete">✕</button>
+              <button class="th-delete" data-strat="${activeIdx}" data-buy="${realIdx}" title="Delete">✕</button>
             </div>`;
           }).join('')
       }
