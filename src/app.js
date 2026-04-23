@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v10.4
+   Build: 2026-04-17-v10.5
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v10.4');
+console.log('OmenFi build: 2026-04-14-v10.5');
 'use strict';
 
 // Production build — debug panel removed
@@ -2829,8 +2829,20 @@ async function renderTracker() {
       ${buyMoreBtn}
     </div>
 
-    <!-- Stats -->
+    <!-- Stats: Avg Entry | Current Price / Total Invested | Current Value / P&L full width -->
     <div class="tracker-stats" style="grid-template-columns:repeat(2,1fr)">
+      <div class="tstat">
+        <div class="tstat-label">Avg Entry Price</div>
+        <div class="tstat-value">$${stats ? fmt(stats.avgEntry) : '—'}</div>
+        <div class="tstat-sub" style="${livePrice && stats && livePrice < stats.avgEntry ? 'color:var(--red)' : 'color:var(--green)'}">
+          ${livePrice && stats ? (livePrice < stats.avgEntry ? '▼ Below average' : '▲ Above average') : ''}
+        </div>
+      </div>
+      <div class="tstat" style="border-color:${livePrice ? 'rgba(255,140,42,0.3)' : 'var(--b)'}">
+        <div class="tstat-label">Current Price</div>
+        <div class="tstat-value" style="color:var(--accent)">${livePrice ? '$' + fmt(livePrice) : '—'}</div>
+        <div class="tstat-sub">Live ${asset.symbol}</div>
+      </div>
       <div class="tstat">
         <div class="tstat-label">Total Invested</div>
         <div class="tstat-value">$${stats ? fmt(stats.totalInvested) : '—'}</div>
@@ -2842,18 +2854,6 @@ async function renderTracker() {
           ${stats?.currentValue != null ? '$' + fmt(stats.currentValue) : '—'}
         </div>
         <div class="tstat-sub">${stats ? fmtCoins(stats.totalCoins) + ' ' + asset.symbol : ''}</div>
-      </div>
-      <div class="tstat">
-        <div class="tstat-label">Avg Entry Price</div>
-        <div class="tstat-value">$${stats ? fmt(stats.avgEntry) : '—'}</div>
-        <div class="tstat-sub" style="${livePrice && stats && livePrice < stats.avgEntry ? 'color:var(--red)' : 'color:var(--green)'}">
-          ${livePrice ? (livePrice < (stats?.avgEntry || 0) ? '▼ Below avg — DCA now' : '▲ Above avg — on track') : ''}
-        </div>
-      </div>
-      <div class="tstat" style="border-color:${livePrice ? 'rgba(255,140,42,0.3)' : 'var(--b)'}">
-        <div class="tstat-label">Current Price</div>
-        <div class="tstat-value" style="color:var(--accent)">${livePrice ? '$' + fmt(livePrice) : '—'}</div>
-        <div class="tstat-sub">Live ${asset.symbol} price</div>
       </div>
       <div class="tstat" style="grid-column:span 2">
         <div class="tstat-label">Total P&L</div>
@@ -2871,7 +2871,12 @@ async function renderTracker() {
         <span class="tprog-count">${stats ? stats.completedBuys + ' of ~' + stats.expectedBuys + ' expected buys' : '0 buys'}</span>
       </div>
       <div class="tprog-bar-bg">
-        <div class="tprog-bar-fill" style="width:${stats ? Math.min(100, stats.progressPct).toFixed(1) : 0}%"></div>
+        <div class="tprog-bar-fill" style="width:${stats ? Math.min(100, stats.progressPct).toFixed(1) : 0}%;background:${
+          !stats || stats.progressPct < 25 ? 'linear-gradient(90deg,#ff3a5c,#ff6b35)' :
+          stats.progressPct < 50 ? 'linear-gradient(90deg,#ff8c2a,#ffb347)' :
+          stats.progressPct < 75 ? 'linear-gradient(90deg,#f5d020,#f0a500)' :
+          'linear-gradient(90deg,#00e87a,#00c060)'
+        }"></div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:8px">
         <span style="font-family:var(--fm);font-size:0.62rem;color:var(--t3)">
