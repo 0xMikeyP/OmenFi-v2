@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v10.2
+   Build: 2026-04-17-v10.3
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v10.2');
+console.log('OmenFi build: 2026-04-14-v10.3');
 'use strict';
 
 // Production build — debug panel removed
@@ -2778,7 +2778,7 @@ async function renderTracker() {
     : '';
 
   // "Buy More Trackers" — always visible, only clickable when no free slot
-  const buyMoreBtn = `<button class="strat-pill strat-pill-add" id="tracker-buy-btn">⚡ Buy More Trackers — 0.05 SOL</button>`;
+  const buyMoreBtn = `<button id="tracker-buy-btn" style="display:flex;align-items:center;gap:8px;padding:10px 18px;background:rgba(255,140,42,0.15);border:1px solid rgba(255,140,42,0.5);border-radius:20px;cursor:pointer;font-family:var(--fm);font-size:0.72rem;font-weight:700;color:var(--accent);letter-spacing:0.06em;transition:all 0.2s">⚡ Buy More Trackers — 0.05 SOL</button>`;
 
   // No strategies yet — show setup
   if (!active) {
@@ -2925,6 +2925,24 @@ async function renderTracker() {
 
     <div id="tracker-setup-form" style="margin-top:16px"></div>
   `;
+
+  // Wire all buttons after innerHTML is set
+  document.getElementById('tracker-del-strat-btn')?.addEventListener('click', () => trackerDeleteStrategy(activeIdx));
+  document.getElementById('tracker-new-btn')?.addEventListener('click', trackerShowSetupInline);
+  document.getElementById('tracker-buy-btn')?.addEventListener('click', trackerUnlockSlot);
+  document.getElementById('tlog-submit-btn')?.addEventListener('click', () => trackerLogBuy(activeIdx));
+
+  // Event delegation for delete buy buttons
+  document.querySelector('.tracker-history')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-buy]');
+    if (btn) trackerDeleteBuy(parseInt(btn.dataset.strat), parseInt(btn.dataset.buy));
+  });
+
+  // Event delegation for strategy pills
+  document.querySelector('.tracker-strategies')?.addEventListener('click', e => {
+    const pill = e.target.closest('[data-strat-idx]');
+    if (pill) trackerSetActive(parseInt(pill.dataset.stratIdx));
+  });
 }
 
 
