@@ -1560,22 +1560,30 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
   background: rgba(255,255,255,0.06);
   border-radius: 4px;
   overflow: hidden;
+  position: relative;
 }
 .tprog-bar-fill {
   height: 100%;
-  /* Full-spectrum gradient: the bar reveals more of it as progress increases */
-  background: linear-gradient(90deg,
-    #ff3a5c 0%,
-    #ff6b35 20%,
-    #ff8c2a 35%,
-    #f5d020 55%,
-    #a8e063 75%,
-    #00e87a 100%
-  );
-  background-size: 100vw 100%;
-  background-position: 0 0;
+  /* Gradient spans full track width — bar fill reveals it left to right */
+  position: relative;
   border-radius: 4px;
   transition: width 0.7s cubic-bezier(0.4,0,0.2,1);
+  overflow: visible;
+}
+.tprog-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  /* Fixed width matching the track — clip is handled by parent overflow:hidden */
+  width: calc(100vw);
+  background: linear-gradient(90deg,
+    #e63946 0%,
+    #ff6b35 25%,
+    #ffbe0b 50%,
+    #70e000 75%,
+    #00e87a 100%
+  );
+  border-radius: 4px;
 }
 .tprog-months {
   display: flex;
@@ -1614,9 +1622,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 .tlog-form {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 12px;
   align-items: end;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .tlog-field {
   display: flex;
@@ -1634,17 +1645,19 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 }
 .tlog-field input {
   width: 100%;
+  max-width: 100%;
   background: var(--bg);
   border: 1px solid var(--b);
   border-radius: 6px;
-  padding: 9px 10px;
+  padding: 9px 6px;
   font-family: var(--fd);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--text);
   outline: none;
   transition: border-color 0.15s;
   height: 38px;
   box-sizing: border-box;
+  min-width: 0;
 }
 .tlog-field input:focus { border-color: var(--accent); }
 .tlog-submit {
@@ -1771,3 +1784,40 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
   margin-bottom: 14px;
   text-align: center;
 }
+
+/* Period history blocks */
+.period-block {
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.period-block:last-child { border-bottom: none; }
+.period-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  gap: 8px;
+}
+.period-header:hover { background: rgba(255,255,255,0.03); }
+.period-label {
+  font-family: var(--fm);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+.period-prog-bg {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 40px;
+  max-width: 100px;
+}
+.period-prog-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+.period-buys { border-top: 1px solid rgba(255,255,255,0.04); }
