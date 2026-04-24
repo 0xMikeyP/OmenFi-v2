@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v10.6
+   Build: 2026-04-17-v10.8
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v10.6');
+console.log('OmenFi build: 2026-04-14-v10.8');
 'use strict';
 
 // Production build — debug panel removed
@@ -2732,6 +2732,87 @@ function calcTrackerStats(strategy, livePrice) {
   return { totalInvested, totalCoins, avgEntry, currentValue, pnl, pnlPct, progressPct, completedBuys, expectedBuys: Math.round(expectedBuys), expectedDollars, monthsElapsed: Math.ceil(daysElapsed/30.44) };
 }
 
+// Generate all DCA periods from startDate to today
+// Each period has: label, start, end, target $, buys logged, total invested, hit/miss
+function calcPeriods(strategy) {
+  const buys      = strategy.buys || [];
+  const startDate = new Date(strategy.startDate || buys[0]?.date || new Date());
+  startDate.setHours(0, 0, 0, 0);
+  const now       = new Date();
+  now.setHours(23, 59, 59, 999);
+  const target    = Number(strategy.amount);
+  const freq      = strategy.frequency;
+  const periods   = [];
+
+  // Get period start aligned to natural boundaries
+  // Weekly: starts on Monday of the week containing startDate
+  // Monthly: starts on 1st of month containing startDate
+  // Daily: starts on startDate itself
+  function getPeriodStart(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    if (freq === 'weekly') {
+      const day = d.getDay(); // 0=Sun
+      const diff = (day === 0 ? -6 : 1 - day); // back to Monday
+      d.setDate(d.getDate() + diff);
+    } else if (freq === 'monthly') {
+      d.setDate(1);
+    }
+    return d;
+  }
+
+  function getNextPeriodStart(periodStart) {
+    const d = new Date(periodStart);
+    if (freq === 'daily')   d.setDate(d.getDate() + 1);
+    if (freq === 'weekly')  d.setDate(d.getDate() + 7);
+    if (freq === 'monthly') d.setMonth(d.getMonth() + 1);
+    return d;
+  }
+
+  function periodLabel(pStart, pEnd) {
+    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    if (freq === 'daily')   return mo[pStart.getMonth()] + ' ' + pStart.getDate();
+    if (freq === 'weekly')  return mo[pStart.getMonth()] + ' ' + pStart.getDate() + ' – ' + mo[pEnd.getMonth()] + ' ' + pEnd.getDate();
+    if (freq === 'monthly') return mo[pStart.getMonth()] + ' ' + pStart.getFullYear();
+    return '';
+  }
+
+  let pStart = getPeriodStart(startDate);
+  let safety = 0;
+
+  while (pStart <= now && safety++ < 500) {
+    const pEnd = new Date(getNextPeriodStart(pStart) - 1); // end = 1ms before next start
+    pEnd.setHours(23, 59, 59, 999);
+
+    // Find buys within this period
+    const periodBuys = buys.filter(b => {
+      const bd = new Date(b.date); bd.setHours(12);
+      return bd >= pStart && bd <= pEnd;
+    });
+
+    const invested = periodBuys.reduce((s, b) => s + Number(b.amount), 0);
+    const isCurrentPeriod = pStart <= now && now <= pEnd;
+    const isPast = pEnd < now && !isCurrentPeriod;
+    const hit = isPast ? invested >= target * 0.95 : null; // 5% tolerance for rounding
+
+    periods.push({
+      label:    periodLabel(pStart, pEnd),
+      start:    new Date(pStart),
+      end:      new Date(pEnd),
+      target,
+      invested,
+      buys:     periodBuys,
+      isCurrent: isCurrentPeriod,
+      isPast,
+      hit,
+    });
+
+    pStart = getNextPeriodStart(pStart);
+  }
+
+  return periods.reverse(); // most recent first
+}
+
 // Render the full tracker tab
 async function renderTracker() {
   const el = $('tracker-content');
@@ -2836,8 +2917,8 @@ async function renderTracker() {
       <div class="tstat">
         <div class="tstat-label">Avg Entry Price</div>
         <div class="tstat-value">$${stats ? fmt(stats.avgEntry) : '—'}</div>
-        <div class="tstat-sub" style="${livePrice && stats && livePrice < stats.avgEntry ? 'color:var(--red)' : 'color:var(--green)'}">
-          ${livePrice && stats ? (livePrice < stats.avgEntry ? '▼ Below average' : '▲ Above average') : ''}
+        <div class="tstat-sub" style="${livePrice && stats ? (livePrice < stats.avgEntry ? 'color:var(--red)' : 'color:var(--green)') : ''}">
+          ${livePrice && stats ? (livePrice < stats.avgEntry ? '▼ Price below your avg' : '▲ Price above your avg') : ''}
         </div>
       </div>
       <div class="tstat" style="border-color:${livePrice ? 'rgba(255,140,42,0.3)' : 'var(--b)'}">
@@ -2907,43 +2988,87 @@ async function renderTracker() {
       <button class="tlog-submit" id="tlog-submit-btn">+ Log This Buy</button>
     </div>
 
-    <!-- History -->
-    <div class="tracker-history">
-      <div class="thistory-header">
-        <span>Date</span>
-        <span>USD Spent</span>
-        <span>${asset.symbol} Price</span>
-        <span></span>
-      </div>
-      ${buys.length === 0
-        ? `<div class="thistory-empty">No buys logged yet. Use the form above to log your first buy.</div>`
-        : [...buys].reverse().map((b, ri) => {
-            const realIdx = buys.length - 1 - ri;
-            const coins = Number(b.amount) / Number(b.price);
-            const coinsDisplay = coins >= 1 ? coins.toFixed(4) : coins >= 0.001 ? coins.toFixed(6) : coins.toFixed(8);
-            return `<div class="thistory-row">
-              <span class="th-date">${b.date}</span>
-              <span class="th-amount">$${fmt(b.amount)}</span>
-              <span class="th-price">$${fmt(b.price)} <span class="th-coins">${coinsDisplay} ${asset.symbol}</span></span>
-              <button class="th-delete" data-strat="${activeIdx}" data-buy="${realIdx}" title="Delete">✕</button>
-            </div>`;
-          }).join('')
-      }
-    </div>
+    <!-- Period history -->
+    ${(() => {
+      const periods = calcPeriods(active);
+      if (!periods.length) return '<div class="thistory-empty">No periods yet.</div>';
+
+      return periods.map((p, pi) => {
+        const pct  = Math.min(100, (p.invested / p.target) * 100);
+        const statusColor = p.isCurrent ? 'var(--accent)' :
+                            p.hit === true ? 'var(--green)' :
+                            p.hit === false ? 'var(--red)' : 'var(--t3)';
+        const statusIcon  = p.isCurrent ? '● Active' :
+                            p.hit === true ? '✓ Hit' :
+                            p.hit === false ? '✗ Missed' : '';
+
+        const buyRows = p.buys.map(b => {
+          const realIdx = buys.indexOf(b);
+          const coins = Number(b.amount) / Number(b.price);
+          const coinsDisplay = coins >= 1 ? coins.toFixed(4) : coins >= 0.001 ? coins.toFixed(6) : coins.toFixed(8);
+          return `<div class="thistory-row" style="padding-left:24px;background:rgba(255,255,255,0.01)">
+            <span class="th-date">${b.date}</span>
+            <span class="th-amount">$${fmt(b.amount)}</span>
+            <span class="th-price">$${fmt(b.price)} <span class="th-coins">${coinsDisplay} ${asset.symbol}</span></span>
+            <button class="th-delete" data-strat="${activeIdx}" data-buy="${realIdx}" title="Delete">✕</button>
+          </div>`;
+        }).join('');
+
+        return `<div class="period-block">
+          <div class="period-header" data-period="${pi}" style="border-left:3px solid ${statusColor}">
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span class="period-label">${p.label}</span>
+                <span style="font-family:var(--fm);font-size:0.65rem;font-weight:700;color:${statusColor};white-space:nowrap">${statusIcon}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="period-prog-bg">
+                  <div class="period-prog-fill" style="width:${pct.toFixed(1)}%;background:${
+                    pct < 25 ? '#e63946' : pct < 50 ? '#ff8c2a' : pct < 75 ? '#ffbe0b' : '#00e87a'
+                  }"></div>
+                </div>
+                <span style="font-family:var(--fm);font-size:0.62rem;color:var(--t3);white-space:nowrap">
+                  $${fmt(p.invested)} / $${fmt(p.target)}
+                </span>
+              </div>
+            </div>
+            <span class="period-chevron" style="color:var(--t3);font-size:0.7rem;padding-left:8px">${p.buys.length ? '▾' : ''}</span>
+          </div>
+          ${p.buys.length ? `<div class="period-buys" id="period-buys-${pi}">
+            <div class="thistory-header" style="padding-left:24px">
+              <span>Date</span><span>Spent</span><span>Price</span><span></span>
+            </div>
+            ${buyRows}
+          </div>` : ''}
+        </div>`;
+      }).join('');
+    })()}
 
     <div id="tracker-setup-form" style="margin-top:16px"></div>
   `;
 
   // Wire all buttons after innerHTML is set
   document.getElementById('tracker-del-strat-btn')?.addEventListener('click', () => trackerDeleteStrategy(activeIdx));
-  document.getElementById('tracker-new-btn')?.addEventListener('click', trackerShowSetupInline);
+  document.getElementById('tracker-new-btn')?.addEventListener('click', () => {
+    trackerShowSetupInline();
+    setTimeout(() => document.getElementById('tracker-setup-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  });
   document.getElementById('tracker-buy-btn')?.addEventListener('click', trackerUnlockSlot);
   document.getElementById('tlog-submit-btn')?.addEventListener('click', () => trackerLogBuy(activeIdx));
 
-  // Event delegation for delete buy buttons
-  document.querySelector('.tracker-history')?.addEventListener('click', e => {
-    const btn = e.target.closest('[data-buy]');
-    if (btn) trackerDeleteBuy(parseInt(btn.dataset.strat), parseInt(btn.dataset.buy));
+  // Event delegation for delete buy buttons and period toggles
+  document.getElementById('tracker-content')?.addEventListener('click', e => {
+    // Delete buy
+    const delBtn = e.target.closest('[data-buy]');
+    if (delBtn) { trackerDeleteBuy(parseInt(delBtn.dataset.strat), parseInt(delBtn.dataset.buy)); return; }
+
+    // Toggle period buy list
+    const ph = e.target.closest('.period-header');
+    if (ph) {
+      const idx = ph.dataset.period;
+      const buysEl = document.getElementById('period-buys-' + idx);
+      if (buysEl) buysEl.style.display = buysEl.style.display === 'none' ? '' : 'none';
+    }
   });
 
   // Event delegation for strategy pills
@@ -2970,15 +3095,15 @@ function trackerShowSetupInline() {
       <div class="tsetup-form">
         <div class="tsetup-field">
           <label>Asset to Track</label>
-          <select id="tsetup-asset">${assetOptions}</select>
+          <select id="tsetup-asset" autocomplete="off">${assetOptions}</select>
         </div>
         <div class="tsetup-field">
           <label>Buy Amount (USD)</label>
-          <input type="number" id="tsetup-amount" placeholder="100" min="1">
+          <input type="number" id="tsetup-amount" placeholder="100" min="1" autocomplete="off" value="">
         </div>
         <div class="tsetup-field">
           <label>Frequency</label>
-          <select id="tsetup-freq">
+          <select id="tsetup-freq" autocomplete="off">
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
             <option value="daily">Daily</option>
