@@ -824,7 +824,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
    ============================================ */
 .compare-grid {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0,1fr) minmax(88px,100px) minmax(0,1fr);
   gap: 0;
   margin-bottom: 20px;
   border: 1px solid var(--b);
@@ -854,7 +854,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
   border-top: 3px solid rgba(255,255,255,0.1);
   border-left: 1px solid var(--b);
   border-right: 1px solid var(--b);
-  min-width: 72px;
+  min-width: 88px;
   text-align: center;
   display: flex;
   align-items: center;
@@ -869,19 +869,20 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 
 /* Row label — spans full width above each metric group */
 .cg-row-label-above {
-  padding: 10px 4px 3px;
+  padding: 8px 6px 3px;
   font-family: var(--fm);
-  font-size: clamp(0.55rem, 1.8vw, 0.68rem);
+  font-size: clamp(0.5rem, 1.6vw, 0.63rem);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--t2);
   background: var(--bg3);
   border-top: 1px solid var(--b);
   text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  hyphens: auto;
+  line-height: 1.3;
 }
 .cg-row-label-above:first-of-type,
 .compare-grid > .cg-row-label-above:nth-child(4) { border-top: none; }
@@ -889,7 +890,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 
 /* Value cells */
 .cg-val {
-  padding: 6px 12px 12px;
+  padding: 6px 8px 12px;
   border-bottom: 1px solid transparent;
   display: flex;
   flex-direction: column;
@@ -897,13 +898,15 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
   align-items: center;
   text-align: center;
   gap: 2px;
+  overflow: hidden;
+  min-width: 0;
 }
 .std-val  { background: rgba(255,140,42,0.04); }
 .diff-val {
   background: rgba(255,255,255,0.02);
   border-left: 1px solid var(--b);
   border-right: 1px solid var(--b);
-  min-width: 72px;
+  min-width: 88px;
 }
 .opt-val  { background: rgba(0,232,122,0.04); }
 .highlight-val { background: rgba(0,232,122,0.07) !important; }
@@ -912,12 +915,15 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 /* Main value */
 .cg-main {
   font-family: var(--fd);
-  font-size: clamp(0.82rem, 2.8vw, 1.15rem);
+  font-size: clamp(0.72rem, 2.4vw, 1.05rem);
   font-weight: 700;
   color: var(--text);
   letter-spacing: 0.01em;
   line-height: 1.2;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .cg-main.muted { color: var(--t2); }
 /* Green ONLY in the difference column — not in std or opt columns */
