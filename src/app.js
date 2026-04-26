@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v10.8
+   Build: 2026-04-17-v10.9
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v10.8');
+console.log('OmenFi build: 2026-04-14-v10.9');
 'use strict';
 
 // Production build — debug panel removed
@@ -2608,7 +2608,12 @@ function fmtK(n){
 
 function fmtCoins(n){
   if(!n||isNaN(n)) return '—';
-  if(n>=1000) return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4});
+  // Abbreviate large numbers to keep them from overflowing cells
+  if(n>=1_000_000_000) return (n/1_000_000_000).toFixed(2)+'B';
+  if(n>=1_000_000)     return (n/1_000_000).toFixed(2)+'M';
+  if(n>=10_000)        return (n/1_000).toFixed(2)+'K';
+  if(n>=1_000)         return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(n>=1)             return n.toFixed(4);
   return n.toFixed(8);
 }
 
