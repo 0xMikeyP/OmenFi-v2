@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v11.0
+   Build: 2026-04-17-v11.1
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v11.0');
+console.log('OmenFi build: 2026-04-14-v11.1');
 'use strict';
 
 // Production build — debug panel removed
@@ -2600,6 +2600,14 @@ function fmt(n){
   if(abs>=1e6) return (n/1e6).toFixed(2)+'M';
   return Math.round(n).toLocaleString('en-US');
 }
+// Price formatter — keeps cents for low-value assets
+function fmtPrice(n){
+  if(n==null||isNaN(n)) return '—';
+  if(n>=1000)  return Math.round(n).toLocaleString('en-US');
+  if(n>=100)   return n.toFixed(2);
+  if(n>=1)     return n.toFixed(4);
+  return n.toFixed(6); // sub-$1 assets like SHIB
+}
 function fmtK(n){
   if(Math.abs(n)>=1e6) return (n/1e6).toFixed(1)+'M';
   if(Math.abs(n)>=1e3) return (n/1e3).toFixed(0)+'K';
@@ -2921,14 +2929,14 @@ async function renderTracker() {
     <div class="tracker-stats" style="grid-template-columns:repeat(2,1fr)">
       <div class="tstat">
         <div class="tstat-label">Avg Entry Price</div>
-        <div class="tstat-value">$${stats ? fmt(stats.avgEntry) : '—'}</div>
+        <div class="tstat-value">$${stats ? fmtPrice(stats.avgEntry) : '—'}</div>
         <div class="tstat-sub" style="${livePrice && stats ? (livePrice < stats.avgEntry ? 'color:var(--red)' : 'color:var(--green)') : ''}">
           ${livePrice && stats ? (livePrice < stats.avgEntry ? '▼ Price below your avg' : '▲ Price above your avg') : ''}
         </div>
       </div>
       <div class="tstat" style="border-color:${livePrice ? 'rgba(255,140,42,0.3)' : 'var(--b)'}">
         <div class="tstat-label">Current Price</div>
-        <div class="tstat-value" style="color:var(--accent)">${livePrice ? '$' + fmt(livePrice) : '—'}</div>
+        <div class="tstat-value" style="color:var(--accent)">${livePrice ? '$' + fmtPrice(livePrice) : '—'}</div>
         <div class="tstat-sub">Live ${asset.symbol}</div>
       </div>
       <div class="tstat">
@@ -2982,8 +2990,8 @@ async function renderTracker() {
         <div class="tlog-field">
           <label>${asset.symbol} Price Paid</label>
           <input type="number" id="tlog-price" min="0" step="any"
-            value="${livePrice ? Math.round(livePrice) : ''}"
-            placeholder="${livePrice ? '$' + fmt(livePrice) : 'e.g. 65000'}">
+            value="${livePrice ? (livePrice >= 1000 ? Math.round(livePrice) : livePrice.toFixed(2)) : ''}"
+            placeholder="${livePrice ? '$' + (livePrice >= 1000 ? fmt(livePrice) : livePrice.toFixed(2)) : 'e.g. 65000'}">
         </div>
         <div class="tlog-field">
           <label>Date</label>
