@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v13.0
+   Build: 2026-04-17-v13.1
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v13.0');
+console.log('OmenFi build: 2026-04-14-v13.1');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -1957,46 +1957,9 @@ function renderConnect() {
 }
 
 
-// TEMP DEBUG PANEL — remove before final launch
-(function() {
-  const logs = [];
-  const orig = { log: console.log, warn: console.warn, error: console.error };
-  function capture(type, args) {
-    const msg = Array.from(args).map(a => {
-      try { return typeof a === 'object' ? JSON.stringify(a).slice(0,300) : String(a); }
-      catch(e) { return String(a); }
-    }).join(' ');
-    logs.push({ type, msg, t: new Date().toLocaleTimeString() });
-    if (logs.length > 60) logs.shift();
-    updatePanel();
-  }
-  console.log  = function() { orig.log.apply(console, arguments);  capture('log',   arguments); };
-  console.warn = function() { orig.warn.apply(console, arguments); capture('warn',  arguments); };
-  console.error= function() { orig.error.apply(console,arguments); capture('error', arguments); };
-  window.onerror = function(msg, src, line) { capture('error', [msg + ' (line '+line+')']); return false; };
-  window.onunhandledrejection = function(e) { capture('error', ['Unhandled: ' + (e.reason?.message || e.reason)]); };
 
-  function updatePanel() {
-    const el = document.getElementById('_dbg');
-    if (!el) return;
-    el.innerHTML = logs.slice(-25).map(l =>
-      `<div style="color:${l.type==='error'?'#ff6b6b':l.type==='warn'?'#ffd93d':'#ccc'};font-size:11px;border-bottom:1px solid #222;padding:3px 0;word-break:break-all">[${l.t}] ${l.msg}</div>`
-    ).join('');
-    el.scrollTop = el.scrollHeight;
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const panel = document.createElement('div');
-    panel.id = '_dbg';
-    panel.style.cssText = 'position:fixed;bottom:40px;left:0;right:0;max-height:280px;overflow-y:auto;background:rgba(0,0,0,0.93);z-index:9999;padding:8px;display:none;font-family:monospace;border-top:2px solid #ff8c2a';
-    document.body.appendChild(panel);
-    const toggle = document.createElement('button');
-    toggle.textContent = '🔍 Debug';
-    toggle.style.cssText = 'position:fixed;bottom:0;right:0;z-index:10000;background:#ff8c2a;color:#000;border:none;padding:6px 12px;font-size:12px;font-weight:bold';
-    toggle.onclick = () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; updatePanel(); };
-    document.body.appendChild(toggle);
-  });
-})();
+// Payment configuration
+const TREASURY_WALLET = 'DA15xYbJugwBj7PWT6GQy6GcLYyGTBk46jv6KVAr6xsz';
 
 const UNLOCK_ALL_PRICE = 0.2; // SOL — bundle price for all 11 assets
 
