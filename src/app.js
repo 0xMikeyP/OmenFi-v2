@@ -1926,10 +1926,8 @@ async function doConnect(walletType = 'phantom') {
       await new Promise(r => setTimeout(r, 200));
 
       console.log('MWA: calling transact() with reflector...');
-      // Use Solana Mobile's public reflector relay instead of localhost WebSocket
-      // This completely bypasses Chrome's Private Network Access check
-      // No localhost connection = no frozen permission dialog
-      const authResult = await window.mwaTransact(async (wallet) => {
+      // Try reflector first (avoids Chrome PNA dialog), fall back to default
+      const mwaCallback = async (wallet) => {
         console.log('MWA: inside callback');
         const auth = await wallet.authorize({
           chain: 'solana:mainnet',
@@ -1941,9 +1939,20 @@ async function doConnect(walletType = 'phantom') {
         });
         console.log('MWA: auth result keys:', Object.keys(auth||{}).join(','));
         return auth;
-      }, {
-        baseUri: 'wss://reflector.solanamobile.com',
-      });
+      };
+
+      let authResult;
+      try {
+        // v2.3.0+ supports baseUri for reflector relay (no localhost)
+        authResult = await window.mwaTransact(mwaCallback, {
+          baseUri: 'wss://reflector.solanamobile.com',
+        });
+        console.log('MWA: connected via reflector');
+      } catch(reflectorErr) {
+        console.warn('MWA reflector failed, trying direct:', reflectorErr?.message);
+        // Fall back to direct localhost (will show PNA dialog on first use)
+        authResult = await window.mwaTransact(mwaCallback);
+      }
 
       if (!authResult?.accounts?.[0]?.address) {
         throw new Error('Authorization failed. Please try again.');
