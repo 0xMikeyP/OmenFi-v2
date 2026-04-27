@@ -1885,9 +1885,7 @@ function renderConnect() {
     <div id="connect-error" style="display:none;color:var(--red);font-family:var(--fm);font-size:.78rem;text-align:center;margin-top:8px;padding:8px;background:rgba(255,58,92,.08);border-radius:6px;border:1px solid rgba(255,58,92,.2)"></div>
   `;
   $('cw-phantom').addEventListener('click',   () => doConnect('phantom'));
-  // Seeker: call mwaTransact DIRECTLY from the tap handler — no async wrapper
-  // Chrome's user gesture window expires if transact() isn't called synchronously
-  $('cw-seedvault').addEventListener('click', () => {
+  $('cw-seedvault').addEventListener('click', async () => {
     const errEl = $('connect-error');
     const btns  = document.querySelectorAll('#modal-inner .wopt');
     btns.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
@@ -1900,9 +1898,25 @@ function renderConnect() {
     }
 
     const web3 = window.solanaWeb3;
+
+    // Request local-network-access permission explicitly first
+    // This shows a proper tappable dialog separate from the frozen MWA dialog
+    // Chrome 138+ supports navigator.permissions.request({name:'local-network-access'})
+    try {
+      if (navigator.permissions && navigator.permissions.request) {
+        const perm = await navigator.permissions.request({ name: 'local-network-access' });
+        console.log('MWA: local-network-access permission:', perm.state);
+        if (perm.state === 'denied') {
+          throw new Error('Local network access denied. Please allow it to use Seeker Wallet.');
+        }
+      }
+    } catch(permErr) {
+      // Permission API not supported or already granted — continue anyway
+      console.log('MWA: permission request skipped:', permErr?.message);
+    }
+
     console.log('MWA: calling transact() from direct tap handler');
 
-    // transact() fires HERE — synchronously within the tap event, no await before it
     window.mwaTransact(async (wallet) => {
       console.log('MWA: inside callback');
       return await wallet.authorize({
