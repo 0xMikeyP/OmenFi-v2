@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v12.1
+   Build: 2026-04-17-v12.2
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v12.1');
+console.log('OmenFi build: 2026-04-14-v12.2');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -1925,7 +1925,10 @@ async function doConnect(walletType = 'phantom') {
       // Small delay to let Chrome process the permission grant
       await new Promise(r => setTimeout(r, 200));
 
-      console.log('MWA: calling transact()...');
+      console.log('MWA: calling transact() with reflector...');
+      // Use Solana Mobile's public reflector relay instead of localhost WebSocket
+      // This completely bypasses Chrome's Private Network Access check
+      // No localhost connection = no frozen permission dialog
       const authResult = await window.mwaTransact(async (wallet) => {
         console.log('MWA: inside callback');
         const auth = await wallet.authorize({
@@ -1936,8 +1939,10 @@ async function doConnect(walletType = 'phantom') {
             icon: '/icon-192.png',
           },
         });
-        console.log('MWA: auth result:', JSON.stringify(auth)?.slice(0,100));
+        console.log('MWA: auth result keys:', Object.keys(auth||{}).join(','));
         return auth;
+      }, {
+        baseUri: 'wss://reflector.solanamobile.com',
       });
 
       if (!authResult?.accounts?.[0]?.address) {
