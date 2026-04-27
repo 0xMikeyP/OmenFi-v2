@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v12.3
+   Build: 2026-04-17-v12.5
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v12.3');
+console.log('OmenFi build: 2026-04-14-v12.5');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -165,10 +165,37 @@ const $ = id => document.getElementById(id);
 // INIT
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-  // Do NOT loadUnlocked() here — no wallet connected yet, always start locked
-  // Unlocks are loaded in onWalletConnected() once wallet address is known
   state.unlockedAssets = new Set(['bitcoin']);
   refreshUnlockAllBar();
+
+  // Handle return from Seed Vault after Android Intent connect
+  if (sessionStorage.getItem('mwa_pending_connect') === '1') {
+    sessionStorage.removeItem('mwa_pending_connect');
+    sessionStorage.removeItem('mwa_pending_port');
+    sessionStorage.removeItem('mwa_assoc_secret');
+    console.log('MWA: returned from Seed Vault intent, completing auth via transact()...');
+    if (window.mwaTransact) {
+      const web3 = window.solanaWeb3;
+      window.mwaTransact(async (wallet) => {
+        return await wallet.authorize({
+          chain: 'solana:mainnet',
+          identity: { name: 'OmenFi', uri: 'https://omenfi.com', icon: '/icon-192.png' },
+        });
+      }).then(authResult => {
+        if (!authResult?.accounts?.[0]?.address) return;
+        const raw = authResult.accounts[0].address;
+        let pubkey;
+        if (typeof raw === 'string') {
+          try { pubkey = new web3.PublicKey(Uint8Array.from(atob(raw), c => c.charCodeAt(0))).toBase58(); }
+          catch(e) { pubkey = raw; }
+        } else { pubkey = new web3.PublicKey(raw).toBase58(); }
+        if (!pubkey || pubkey.length < 32) return;
+        sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
+        saveWallet(pubkey);
+        onWalletConnected(pubkey, 'seedvault');
+      }).catch(e => console.error('MWA post-intent auth failed:', e?.message));
+    }
+  }
 
   // Restore wallet after Phantom reloads the page on mobile connect
   // Phantom injects window.solana asynchronously AFTER DOMContentLoaded,
@@ -1898,85 +1925,33 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      // Seeker Wallet — MWA transact() via @solana-mobile/mobile-wallet-adapter-protocol-web3js
-      // IMPORTANT: This only works reliably from the PWA (home screen), not Chrome browser
-      // Chrome browser mode triggers a permission dialog that may freeze on first use
-      if (!window.mwaTransact) {
-        throw new Error('Seeker Wallet is only available on the Seeker device. Add OmenFi to your home screen first.');
-      }
-
+      // Seeker Wallet — fire Android Intent URI directly
+      // solana-wallet:// is handled by Seed Vault app natively by Android
+      // No Chrome network stack involved = no PNA check = no frozen dialog
       const web3 = window.solanaWeb3;
 
-      // Pre-warm Chrome's Private Network Access permission
-      // by attempting a fetch to a known localhost port first.
-      // This lets Chrome show AND process the permission dialog
-      // before transact() is called, breaking the freeze catch-22.
-      console.log('MWA: pre-warming PNA permission...');
-      try {
-        // Port 8900 is common for MWA but any localhost fetch triggers PNA check
-        const ctrl = new AbortController();
-        setTimeout(() => ctrl.abort(), 500);
-        await fetch('http://localhost:8900/', { signal: ctrl.signal, mode: 'no-cors' });
-      } catch(e) {
-        // Expected to fail — we just needed Chrome to process the PNA check
-        console.log('MWA: PNA pre-warm done (expected error):', e?.name);
-      }
+      // Generate association keypair for this MWA session
+      const assocKeypair = web3.Keypair.generate();
+      const pubkeyBytes = assocKeypair.publicKey.toBytes();
+      const assocPubkeyB64 = btoa(String.fromCharCode(...pubkeyBytes));
+      const port = 49152 + Math.floor(Math.random() * 16383);
 
-      // Small delay to let Chrome process the permission grant
-      await new Promise(r => setTimeout(r, 200));
+      // Persist session state — page may reload when Seed Vault returns
+      sessionStorage.setItem('mwa_assoc_secret', btoa(String.fromCharCode(...assocKeypair.secretKey)));
+      sessionStorage.setItem('mwa_pending_port', String(port));
+      sessionStorage.setItem('mwa_pending_connect', '1');
+      sessionStorage.setItem('mwa_wallet_type', 'seedvault');
 
-      console.log('MWA: calling transact() with reflector...');
-      // Try reflector first (avoids Chrome PNA dialog), fall back to default
-      const mwaCallback = async (wallet) => {
-        console.log('MWA: inside callback');
-        const auth = await wallet.authorize({
-          chain: 'solana:mainnet',
-          identity: {
-            name: 'OmenFi',
-            uri: 'https://omenfi.com',
-            icon: '/icon-192.png',
-          },
-        });
-        console.log('MWA: auth result keys:', Object.keys(auth||{}).join(','));
-        return auth;
-      };
+      // Build solana-wallet:// intent URI — Android handles this natively
+      const intentUri = `solana-wallet://v1/associate/local?association=${encodeURIComponent(assocPubkeyB64)}&port=${port}`;
+      console.log('MWA: firing Android intent...');
 
-      let authResult;
-      try {
-        // v2.3.0+ supports baseUri for reflector relay (no localhost)
-        authResult = await window.mwaTransact(mwaCallback, {
-          baseUri: 'https://reflector.solanamobile.com',
-        });
-        console.log('MWA: connected via reflector');
-      } catch(reflectorErr) {
-        console.warn('MWA reflector failed, trying direct:', reflectorErr?.message);
-        // Fall back to direct localhost (will show PNA dialog on first use)
-        authResult = await window.mwaTransact(mwaCallback);
-      }
+      // Navigate to intent — opens Seed Vault app directly, no Chrome network check
+      window.location.href = intentUri;
 
-      if (!authResult?.accounts?.[0]?.address) {
-        throw new Error('Authorization failed. Please try again.');
-      }
-
-      // MWA returns address as base64 Uint8Array — decode to base58
-      const rawAddress = authResult.accounts[0].address;
-      let pubkey;
-      if (typeof rawAddress === 'string') {
-        try {
-          const bytes = Uint8Array.from(atob(rawAddress), c => c.charCodeAt(0));
-          pubkey = new web3.PublicKey(bytes).toBase58();
-        } catch(e) {
-          pubkey = rawAddress;
-        }
-      } else {
-        pubkey = new web3.PublicKey(rawAddress).toBase58();
-      }
-
-      if (!pubkey || pubkey.length < 32) throw new Error('Invalid public key from wallet.');
-
-      sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
-      saveWallet(pubkey);
-      await onWalletConnected(pubkey, 'seedvault');
+      // Execution stops here — page reloads when user returns from Seed Vault
+      // The DOMContentLoaded handler checks mwa_pending_connect and completes auth
+      return;
 
     } else {
       // Phantom
