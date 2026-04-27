@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v12.5
+   Build: 2026-04-17-v12.7
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v12.5');
+console.log('OmenFi build: 2026-04-14-v12.7');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -167,35 +167,6 @@ const $ = id => document.getElementById(id);
 document.addEventListener('DOMContentLoaded', () => {
   state.unlockedAssets = new Set(['bitcoin']);
   refreshUnlockAllBar();
-
-  // Handle return from Seed Vault after Android Intent connect
-  if (sessionStorage.getItem('mwa_pending_connect') === '1') {
-    sessionStorage.removeItem('mwa_pending_connect');
-    sessionStorage.removeItem('mwa_pending_port');
-    sessionStorage.removeItem('mwa_assoc_secret');
-    console.log('MWA: returned from Seed Vault intent, completing auth via transact()...');
-    if (window.mwaTransact) {
-      const web3 = window.solanaWeb3;
-      window.mwaTransact(async (wallet) => {
-        return await wallet.authorize({
-          chain: 'solana:mainnet',
-          identity: { name: 'OmenFi', uri: 'https://omenfi.com', icon: '/icon-192.png' },
-        });
-      }).then(authResult => {
-        if (!authResult?.accounts?.[0]?.address) return;
-        const raw = authResult.accounts[0].address;
-        let pubkey;
-        if (typeof raw === 'string') {
-          try { pubkey = new web3.PublicKey(Uint8Array.from(atob(raw), c => c.charCodeAt(0))).toBase58(); }
-          catch(e) { pubkey = raw; }
-        } else { pubkey = new web3.PublicKey(raw).toBase58(); }
-        if (!pubkey || pubkey.length < 32) return;
-        sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
-        saveWallet(pubkey);
-        onWalletConnected(pubkey, 'seedvault');
-      }).catch(e => console.error('MWA post-intent auth failed:', e?.message));
-    }
-  }
 
   // Restore wallet after Phantom reloads the page on mobile connect
   // Phantom injects window.solana asynchronously AFTER DOMContentLoaded,
@@ -1914,7 +1885,57 @@ function renderConnect() {
     <div id="connect-error" style="display:none;color:var(--red);font-family:var(--fm);font-size:.78rem;text-align:center;margin-top:8px;padding:8px;background:rgba(255,58,92,.08);border-radius:6px;border:1px solid rgba(255,58,92,.2)"></div>
   `;
   $('cw-phantom').addEventListener('click',   () => doConnect('phantom'));
-  $('cw-seedvault').addEventListener('click', () => doConnect('seedvault'));
+  // Seeker: call mwaTransact DIRECTLY from the tap handler — no async wrapper
+  // Chrome's user gesture window expires if transact() isn't called synchronously
+  $('cw-seedvault').addEventListener('click', () => {
+    const errEl = $('connect-error');
+    const btns  = document.querySelectorAll('#modal-inner .wopt');
+    btns.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
+    if (errEl) errEl.style.display = 'none';
+
+    if (!window.mwaTransact) {
+      btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+      if (errEl) { errEl.textContent = 'Seeker Wallet not available on this device.'; errEl.style.display = 'block'; }
+      return;
+    }
+
+    const web3 = window.solanaWeb3;
+    console.log('MWA: calling transact() from direct tap handler');
+
+    // transact() fires HERE — synchronously within the tap event, no await before it
+    window.mwaTransact(async (wallet) => {
+      console.log('MWA: inside callback');
+      return await wallet.authorize({
+        chain: 'solana:mainnet',
+        identity: {
+          name: 'OmenFi',
+          uri: 'https://omenfi.com',
+          icon: '/icon-192.png',
+        },
+      });
+    }).then(authResult => {
+      if (!authResult?.accounts?.[0]?.address) throw new Error('Authorization failed. Please try again.');
+      const rawAddress = authResult.accounts[0].address;
+      let pubkey;
+      if (typeof rawAddress === 'string') {
+        try { pubkey = new web3.PublicKey(Uint8Array.from(atob(rawAddress), c => c.charCodeAt(0))).toBase58(); }
+        catch(e) { pubkey = rawAddress; }
+      } else {
+        pubkey = new web3.PublicKey(rawAddress).toBase58();
+      }
+      if (!pubkey || pubkey.length < 32) throw new Error('Invalid public key from wallet.');
+      sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
+      saveWallet(pubkey);
+      return onWalletConnected(pubkey, 'seedvault');
+    }).catch(err => {
+      btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+      let msg = err.message || 'Connection failed';
+      if (msg.includes('User rejected') || msg.includes('cancelled') || msg.includes('declined')) msg = 'Connection cancelled.';
+      if (msg.includes('timed out')) msg = 'Connection timed out. Please try again.';
+      if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+      console.error('MWA connect error:', err?.message, err?.code);
+    });
+  });
 }
 
 async function doConnect(walletType = 'phantom') {
@@ -1925,33 +1946,29 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      // Seeker Wallet — fire Android Intent URI directly
-      // solana-wallet:// is handled by Seed Vault app natively by Android
-      // No Chrome network stack involved = no PNA check = no frozen dialog
+      // Seeker Wallet — MWA transact()
+      // Chrome 131+ on Seeker has a bug where the PNA permission dialog
+      // freezes when the JS main thread is blocked. The fix: call transact()
+      // as the VERY FIRST thing on page load with minimal other JS running.
+      // We do this by navigating to /?mwa=1 which triggers connect on load.
+      if (!window.mwaTransact) {
+        throw new Error('Seeker Wallet not available on this device.');
+      }
+
       const web3 = window.solanaWeb3;
+      console.log('MWA: calling transact() directly...');
 
-      // Generate association keypair for this MWA session
-      const assocKeypair = web3.Keypair.generate();
-      const pubkeyBytes = assocKeypair.publicKey.toBytes();
-      const assocPubkeyB64 = btoa(String.fromCharCode(...pubkeyBytes));
-      const port = 49152 + Math.floor(Math.random() * 16383);
-
-      // Persist session state — page may reload when Seed Vault returns
-      sessionStorage.setItem('mwa_assoc_secret', btoa(String.fromCharCode(...assocKeypair.secretKey)));
-      sessionStorage.setItem('mwa_pending_port', String(port));
-      sessionStorage.setItem('mwa_pending_connect', '1');
-      sessionStorage.setItem('mwa_wallet_type', 'seedvault');
-
-      // Build solana-wallet:// intent URI — Android handles this natively
-      const intentUri = `solana-wallet://v1/associate/local?association=${encodeURIComponent(assocPubkeyB64)}&port=${port}`;
-      console.log('MWA: firing Android intent...');
-
-      // Navigate to intent — opens Seed Vault app directly, no Chrome network check
-      window.location.href = intentUri;
-
-      // Execution stops here — page reloads when user returns from Seed Vault
-      // The DOMContentLoaded handler checks mwa_pending_connect and completes auth
-      return;
+      const authResult = await window.mwaTransact(async (wallet) => {
+        console.log('MWA: inside callback');
+        return await wallet.authorize({
+          chain: 'solana:mainnet',
+          identity: {
+            name: 'OmenFi',
+            uri: 'https://omenfi.com',
+            icon: '/icon-192.png',
+          },
+        });
+      });
 
     } else {
       // Phantom
