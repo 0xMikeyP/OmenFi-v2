@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v12.2
+   Build: 2026-04-17-v12.3
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v12.2');
+console.log('OmenFi build: 2026-04-14-v12.3');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -1945,7 +1945,7 @@ async function doConnect(walletType = 'phantom') {
       try {
         // v2.3.0+ supports baseUri for reflector relay (no localhost)
         authResult = await window.mwaTransact(mwaCallback, {
-          baseUri: 'wss://reflector.solanamobile.com',
+          baseUri: 'https://reflector.solanamobile.com',
         });
         console.log('MWA: connected via reflector');
       } catch(reflectorErr) {
