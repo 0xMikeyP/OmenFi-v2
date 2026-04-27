@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v12.9
+   Build: 2026-04-17-v13.0
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v12.9');
+console.log('OmenFi build: 2026-04-14-v13.0');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -1893,196 +1893,111 @@ function renderConnect() {
 
     if (!window.mwaTransact) {
       btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
-      if (errEl) { errEl.textContent = 'Seeker Wallet not available on this device.'; errEl.style.display = 'block'; }
+      if (errEl) { errEl.textContent = 'Seeker Wallet is only available on Android.'; errEl.style.display = 'block'; }
       return;
     }
 
-    const web3 = window.solanaWeb3;
-
-    // Step 1: Pre-warm the Seed Vault app by opening it via intent
-    // This gives it time to start its WebSocket server before transact() connects
-    console.log('MWA: pre-warming Seed Vault via intent...');
-    
-    // Open Seed Vault app via Android intent to wake it up
-    const warmupFrame = document.createElement('iframe');
-    warmupFrame.style.display = 'none';
-    warmupFrame.src = 'solana-wallet://';
-    document.body.appendChild(warmupFrame);
-    
-    // Wait 1.5 seconds for Seed Vault to fully start its WebSocket server
-    await new Promise(r => setTimeout(r, 1500));
-    warmupFrame.remove();
-    
-    // Step 2: Request local-network-access permission
+    // Request local-network-access permission first — must be done before transact()
+    // This gives Chrome a tappable dialog that doesn't freeze
     try {
-      if (navigator.permissions && navigator.permissions.request) {
-        const perm = await navigator.permissions.request({ name: 'local-network-access' });
-        console.log('MWA: local-network-access permission:', perm.state);
-        if (perm.state === 'denied') {
-          throw new Error('Local network access denied. Please allow it to use Seeker Wallet.');
-        }
+      if (navigator.permissions?.request) {
+        const p = await navigator.permissions.request({ name: 'local-network-access' });
+        console.log('MWA: local-network-access:', p.state);
       }
-    } catch(permErr) {
-      console.log('MWA: permission request skipped:', permErr?.message);
+    } catch(e) {
+      console.log('MWA: permission API skipped:', e?.message);
     }
 
-    console.log('MWA: calling transact() from direct tap handler');
-
-    // Retry up to 3 times — Seed Vault WebSocket server needs a moment to start
-    const attemptMWA = (attemptsLeft) => {
-      window.mwaTransact(async (wallet) => {
-        console.log('MWA: inside callback, attempt', 4 - attemptsLeft);
-        return await wallet.authorize({
+    try {
+      // EXACT working implementation from transcript
+      // Uses window.location.origin (not hardcoded URL) and doConnect pattern
+      const authResult = await window.mwaTransact(async (mwaWallet) => {
+        const authorizationResult = await mwaWallet.authorize({
           chain: 'solana:mainnet',
           identity: {
             name: 'OmenFi',
-            uri: 'https://omenfi.com',
+            uri: window.location.origin,
             icon: '/icon-192.png',
           },
         });
-      }).then(authResult => {
-      if (!authResult?.accounts?.[0]?.address) throw new Error('Authorization failed. Please try again.');
-      const rawAddress = authResult.accounts[0].address;
-      let pubkey;
-      if (typeof rawAddress === 'string') {
-        try { pubkey = new web3.PublicKey(Uint8Array.from(atob(rawAddress), c => c.charCodeAt(0))).toBase58(); }
-        catch(e) { pubkey = rawAddress; }
-      } else {
-        pubkey = new web3.PublicKey(rawAddress).toBase58();
-      }
-      if (!pubkey || pubkey.length < 32) throw new Error('Invalid public key from wallet.');
-      sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
-      saveWallet(pubkey);
-      return onWalletConnected(pubkey, 'seedvault');
-    }).catch(err => {
-        const msg = err?.message || '';
-        console.warn('MWA attempt failed:', msg, 'attempts left:', attemptsLeft - 1);
-        if (attemptsLeft > 1 && (msg.includes('TIMEOUT') || msg.includes('timeout') || msg.includes('websocket') || msg.includes('connect'))) {
-          // Retry after 1.5s — gives Seed Vault server time to start
-          console.log('MWA: retrying in 1.5s...');
-          if (errEl) { errEl.textContent = 'Connecting... (attempt ' + (4 - attemptsLeft + 1) + ' of 3)'; errEl.style.display = 'block'; errEl.style.color = 'var(--accent)'; }
-          setTimeout(() => attemptMWA(attemptsLeft - 1), 1500);
-        } else {
-          btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
-          let msg2 = err.message || 'Connection failed';
-          if (msg2.includes('User rejected') || msg2.includes('cancelled') || msg2.includes('declined')) msg2 = 'Connection cancelled.';
-          if (msg2.includes('TIMEOUT') || msg2.includes('timeout')) msg2 = 'Could not reach Seed Vault. Make sure it is installed and try again.';
-          if (errEl) { errEl.textContent = msg2; errEl.style.display = 'block'; errEl.style.color = 'var(--red)'; }
-          console.error('MWA connect failed after retries:', err?.message);
-        }
+        return authorizationResult;
       });
-    };
-    attemptMWA(3);
+
+      if (!authResult?.accounts?.[0]?.address) {
+        throw new Error('Authorization failed. Please try again.');
+      }
+
+      // Decode the base64 public key returned by MWA
+      const addressBytes = authResult.accounts[0].address;
+      const web3 = window.solanaWeb3;
+      const pubkey = new web3.PublicKey(addressBytes).toString();
+
+      sessionStorage.setItem('mwa_auth_token', JSON.stringify({
+        token: authResult.auth_token,
+        address: pubkey,
+      }));
+
+      saveWallet(pubkey);
+      await onWalletConnected(pubkey, 'seedvault');
+
+    } catch(err) {
+      btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+      let msg = err.message || 'Connection failed';
+      if (msg.includes('User rejected') || msg.includes('cancelled') || msg.includes('declined')) msg = 'Connection cancelled.';
+      if (msg.includes('TIMEOUT') || msg.includes('timeout') || msg.includes('websocket')) {
+        msg = 'Timed out. Open Seed Vault app first, then try again.';
+      }
+      if (msg.includes('no installed wallet') || msg.includes('no compatible wallet')) {
+        msg = 'Seed Vault Wallet not found. Make sure it is installed on your Seeker.';
+      }
+      if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+      console.error('MWA connect error:', err?.message);
+    }
   });
 }
 
-async function doConnect(walletType = 'phantom') {
-  const errEl = $('connect-error');
-  const btns  = document.querySelectorAll('#modal-inner .wopt');
-  btns.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
-  if (errEl) errEl.style.display = 'none';
 
-  try {
-    if (walletType === 'seedvault') {
-      // Seeker Wallet — MWA transact()
-      // Chrome 131+ on Seeker has a bug where the PNA permission dialog
-      // freezes when the JS main thread is blocked. The fix: call transact()
-      // as the VERY FIRST thing on page load with minimal other JS running.
-      // We do this by navigating to /?mwa=1 which triggers connect on load.
-      if (!window.mwaTransact) {
-        throw new Error('Seeker Wallet not available on this device.');
-      }
-
-      const web3 = window.solanaWeb3;
-      console.log('MWA: calling transact() directly...');
-
-      const authResult = await window.mwaTransact(async (wallet) => {
-        console.log('MWA: inside callback');
-        return await wallet.authorize({
-          chain: 'solana:mainnet',
-          identity: {
-            name: 'OmenFi',
-            uri: 'https://omenfi.com',
-            icon: '/icon-192.png',
-          },
-        });
-      });
-
-    } else {
-      // Phantom
-      if (isPhantomInjected()) {
-        const provider = window.phantom?.solana || window.solana;
-
-        if (provider.publicKey) {
-          const pubkey = provider.publicKey.toString();
-          saveWallet(pubkey);
-          await onWalletConnected(pubkey, 'phantom');
-          return;
-        }
-
-        sessionStorage.setItem('connecting', '1');
-        const resp = await provider.connect();
-        sessionStorage.removeItem('connecting');
-        const pubkey = resp.publicKey.toString();
-        saveWallet(pubkey);
-        await onWalletConnected(pubkey, 'phantom');
-      } else if (IS_ANDROID) {
-        const url = encodeURIComponent(window.location.href);
-        window.location.href = `https://phantom.app/ul/browse/${url}?ref=${url}`;
-      } else {
-        window.open('https://phantom.app', '_blank');
-        throw new Error('Phantom not detected. Install the Phantom extension and refresh.');
-      }
-    }
-  } catch (err) {
-    btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
-    let msg = err.message || 'Connection failed';
-    if (msg.includes('User rejected') || msg.includes('cancelled') || msg.includes('declined')) {
-      msg = 'Connection cancelled. Tap Seeker Wallet to try again.';
-    } else if (msg.includes('timed out')) {
-      msg = 'Connection timed out. After tapping Allow in the system dialog, return to OmenFi and try again.';
-    }
-    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+// TEMP DEBUG PANEL — remove before final launch
+(function() {
+  const logs = [];
+  const orig = { log: console.log, warn: console.warn, error: console.error };
+  function capture(type, args) {
+    const msg = Array.from(args).map(a => {
+      try { return typeof a === 'object' ? JSON.stringify(a).slice(0,300) : String(a); }
+      catch(e) { return String(a); }
+    }).join(' ');
+    logs.push({ type, msg, t: new Date().toLocaleTimeString() });
+    if (logs.length > 60) logs.shift();
+    updatePanel();
   }
-}
+  console.log  = function() { orig.log.apply(console, arguments);  capture('log',   arguments); };
+  console.warn = function() { orig.warn.apply(console, arguments); capture('warn',  arguments); };
+  console.error= function() { orig.error.apply(console,arguments); capture('error', arguments); };
+  window.onerror = function(msg, src, line) { capture('error', [msg + ' (line '+line+')']); return false; };
+  window.onunhandledrejection = function(e) { capture('error', ['Unhandled: ' + (e.reason?.message || e.reason)]); };
 
-async function onWalletConnected(pubkey, provider) {
-  // Validate wallet address before storing
-  if (!isValidWallet(pubkey)) {
-    console.error('Invalid wallet address received:', pubkey);
-    return;
+  function updatePanel() {
+    const el = document.getElementById('_dbg');
+    if (!el) return;
+    el.innerHTML = logs.slice(-25).map(l =>
+      `<div style="color:${l.type==='error'?'#ff6b6b':l.type==='warn'?'#ffd93d':'#ccc'};font-size:11px;border-bottom:1px solid #222;padding:3px 0;word-break:break-all">[${l.t}] ${l.msg}</div>`
+    ).join('');
+    el.scrollTop = el.scrollHeight;
   }
-  state.wallet         = pubkey;
-  state.walletProvider = provider;
-  saveWallet(pubkey);         // persist wallet address
-  saveWalletProvider(provider); // persist which wallet type
-  $('wallet-btn-text').textContent = pubkey.slice(0,4)+'...'+pubkey.slice(-4);
-  $('wallet-btn').classList.add('connected');
-  await restoreServerUnlocks(pubkey);
-  refreshUnlockAllBar();
-  const pu = sessionStorage.getItem('pu');
-  if (pu && ASSETS[pu]) { sessionStorage.removeItem('pu'); renderConfirm(pu); }
-  else if (pu) { sessionStorage.removeItem('pu'); } // invalid — discard
-  else renderConnected();
 
-  // If tracker tab is currently active, re-render it now that wallet is connected
-  const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
-  if (activeTab === 'tracker') {
-    closeModal();
-    trackerCloudLoad(pubkey).then(() => renderTracker()).catch(() => renderTracker());
-  }
-}
+  document.addEventListener('DOMContentLoaded', () => {
+    const panel = document.createElement('div');
+    panel.id = '_dbg';
+    panel.style.cssText = 'position:fixed;bottom:40px;left:0;right:0;max-height:280px;overflow-y:auto;background:rgba(0,0,0,0.93);z-index:9999;padding:8px;display:none;font-family:monospace;border-top:2px solid #ff8c2a';
+    document.body.appendChild(panel);
+    const toggle = document.createElement('button');
+    toggle.textContent = '🔍 Debug';
+    toggle.style.cssText = 'position:fixed;bottom:0;right:0;z-index:10000;background:#ff8c2a;color:#000;border:none;padding:6px 12px;font-size:12px;font-weight:bold';
+    toggle.onclick = () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; updatePanel(); };
+    document.body.appendChild(toggle);
+  });
+})();
 
-// Legacy compat
-async function connect(){ await doConnect(); }
-
-// ============================================
-// PAYMENT — Real SOL transfer + server verification
-// ============================================
-
-// Treasury wallet — REPLACE WITH YOUR ACTUAL WALLET ADDRESS
-// Set this in Netlify env vars as TREASURY_WALLET too
-const TREASURY_WALLET = 'DA15xYbJugwBj7PWT6GQy6GcLYyGTBk46jv6KVAr6xsz';
 const UNLOCK_ALL_PRICE = 0.2; // SOL — bundle price for all 11 assets
 
 async function doPayment(id) {
@@ -2301,12 +2216,35 @@ async function sendSolPayment(assetId, lamports) {
   let signature;
   try {
     if (state.walletProvider === 'seedvault') {
-      // Seeker Wallet — sendTransaction via SolanaMobileWalletAdapter
-      if (!window.mwaAdapter) {
-        throw new Error('Seeker Wallet not connected. Please reconnect.');
-      }
-      const conn = new web3.Connection('https://api.mainnet-beta.solana.com', 'confirmed');
-      signature = await window.mwaAdapter.sendTransaction(transaction, conn);
+      // Seed Vault — exact working implementation from transcript
+      const storedAuth = JSON.parse(sessionStorage.getItem('mwa_auth_token') || '{}');
+
+      const result = await window.mwaTransact(async (mwaWallet) => {
+        if (storedAuth.token) {
+          try {
+            await mwaWallet.reauthorize({
+              auth_token: storedAuth.token,
+              identity: { name: 'OmenFi', uri: window.location.origin, icon: '/icon-192.png' },
+            });
+          } catch(e) { console.warn('Reauth failed:', e?.message); }
+        }
+
+        const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
+        const results = await mwaWallet.signAndSendTransactions({
+          transactions: [serialized],
+          options: { minContextSlot: 0 },
+        });
+        return results.signatures[0];
+      });
+
+      // Convert base64 signature to base58
+      const sigBytes = Uint8Array.from(atob(result), c => c.charCodeAt(0));
+      const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+      let num = BigInt('0x' + Array.from(sigBytes).map(b => b.toString(16).padStart(2,'0')).join(''));
+      let encoded = '';
+      while (num > 0n) { encoded = BASE58[Number(num % 58n)] + encoded; num = num / 58n; }
+      for (const byte of sigBytes) { if (byte === 0) encoded = '1' + encoded; else break; }
+      signature = encoded;
 
     } else {
       // Phantom — use existing signAndSendTransaction
