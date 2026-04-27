@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v11.2
+   Build: 2026-04-17-v11.3
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v11.2');
+console.log('OmenFi build: 2026-04-14-v11.3');
 'use strict';
 
 // Production build — debug panel removed
@@ -83,13 +83,26 @@ let state = {
 };
 
 // ============================================
-// PERSISTENCE
+// PERSISTENCE — scoped per wallet address
 // ============================================
+function walletKey(suffix) {
+  // All localStorage keys are scoped to the connected wallet address
+  // This prevents cross-wallet unlock bleed
+  const w = state.wallet || '__noWallet__';
+  return 'omenfi_v5_' + suffix + '_' + w;
+}
 function loadUnlocked() {
-  try { const r = localStorage.getItem('omenfi_v5_unlocked'); if (r) state.unlockedAssets = new Set(['bitcoin',...JSON.parse(r)]); } catch {}
+  // Reset to bitcoin-only first — never carry over from previous session
+  state.unlockedAssets = new Set(['bitcoin']);
+  if (!state.wallet) return;
+  try {
+    const r = localStorage.getItem(walletKey('unlocked'));
+    if (r) state.unlockedAssets = new Set(['bitcoin', ...JSON.parse(r)]);
+  } catch {}
 }
 function saveUnlocked() {
-  try { localStorage.setItem('omenfi_v5_unlocked', JSON.stringify([...state.unlockedAssets].filter(a=>a!=='bitcoin'))); } catch {}
+  if (!state.wallet) return;
+  try { localStorage.setItem(walletKey('unlocked'), JSON.stringify([...state.unlockedAssets].filter(a => a !== 'bitcoin'))); } catch {}
 }
 function unlockAsset(id) { state.unlockedAssets.add(id); saveUnlocked(); refreshAssetUI(); }
 
@@ -113,7 +126,9 @@ const $ = id => document.getElementById(id);
 // INIT
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-  loadUnlocked();
+  // Do NOT loadUnlocked() here — no wallet connected yet, always start locked
+  // Unlocks are loaded in onWalletConnected() once wallet address is known
+  state.unlockedAssets = new Set(['bitcoin']);
   refreshUnlockAllBar();
 
   // Restore wallet after Phantom reloads the page on mobile connect
@@ -1853,16 +1868,24 @@ async function doConnect(walletType = 'phantom') {
 
       const web3 = window.solanaWeb3;
 
-      const authResult = await window.mwaTransact(async (wallet) => {
-        return await wallet.authorize({
-          chain: 'solana:mainnet',
-          identity: {
-            name: 'OmenFi',
-            uri: window.location.origin,
-            icon: 'icon-192.png', // must be relative URI per MWA spec
-          },
-        });
-      });
+      // Add 30s timeout — if MWA never resolves (silent fail), unfreeze UI
+      const mwaTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Wallet connection timed out. Please try again.')), 30000)
+      );
+
+      const authResult = await Promise.race([
+        window.mwaTransact(async (wallet) => {
+          return await wallet.authorize({
+            chain: 'solana:mainnet',
+            identity: {
+              name: 'OmenFi',
+              uri: 'https://omenfi.com',   // must exactly match deployed origin
+              icon: 'https://omenfi.com/icon-192.png',
+            },
+          });
+        }),
+        mwaTimeout
+      ]);
 
       if (!authResult?.accounts?.[0]?.address) {
         throw new Error('Authorization failed. Please try again.');
@@ -2289,9 +2312,9 @@ async function verifyPaymentOnServer(signature, assetId, walletAddress) {
 // Store HMAC-signed unlock token in localStorage
 function storeUnlockToken(assetId, token) {
   try {
-    const stored = JSON.parse(localStorage.getItem('omenfi_v5_tokens') || '{}');
+    const stored = JSON.parse(localStorage.getItem(walletKey('tokens')) || '{}');
     stored[assetId] = token;
-    localStorage.setItem('omenfi_v5_tokens', JSON.stringify(stored));
+    localStorage.setItem(walletKey('tokens'), JSON.stringify(stored));
   } catch(e) {
     console.warn('Could not store unlock token:', e);
   }
@@ -2303,7 +2326,7 @@ async function restoreServerUnlocks(walletAddress) {
   restoreLocalUnlocks();
 
   try {
-    const stored = JSON.parse(localStorage.getItem('omenfi_v5_tokens') || '{}');
+    const stored = JSON.parse(localStorage.getItem(walletKey('tokens')) || '{}');
     const tokens = Object.values(stored).filter(Boolean);
 
     if (tokens.length) {
