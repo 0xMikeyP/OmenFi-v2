@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v11.4
+   Build: 2026-04-17-v11.5
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v11.4');
+console.log('OmenFi build: 2026-04-14-v11.5');
 'use strict';
 
 // Production build — debug panel removed
@@ -1859,69 +1859,23 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      // Seed Vault Wallet — use transact() directly
-      // This fires the solana-wallet:// Android intent without triggering
-      // Chrome's Local Network Access permission check
-      if (!window.mwaTransact) {
-        throw new Error('Seed Vault Wallet is only available in Chrome on Android.');
+      // Seeker Wallet — uses SolanaMobileWalletAdapter (high-level)
+      // This fires the solana-wallet:// Android intent correctly
+      // WITHOUT triggering Chrome's Local Network Access permission dialog
+      if (!window.mwaAdapter) {
+        throw new Error('Seeker Wallet not available. Make sure you are on a Seeker device.');
       }
 
-      const web3 = window.solanaWeb3;
+      // connect() fires the Android intent → opens Seed Vault app → user approves
+      // No permission dialog, no localhost WebSocket, no freeze
+      await window.mwaAdapter.connect();
 
-      // Always clear stale MWA auth token — domain changed from netlify to omenfi.com
-      // Keeping old token causes silent auth failure with the permission dialog freeze
-      sessionStorage.removeItem('mwa_auth_token');
-
-      // Add 30s timeout — if MWA never resolves (silent fail), unfreeze UI
-      const mwaTimeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Wallet connection timed out. Please try again.')), 30000)
-      );
-
-      // MWA on Android: after the permission dialog, the wallet app launches
-      // and Chrome is backgrounded. When user approves in wallet and returns
-      // to Chrome, the transact promise resolves. This is normal MWA flow.
-      const authResult = await Promise.race([
-        window.mwaTransact(async (wallet) => {
-          return await wallet.authorize({
-            chain: 'solana:mainnet',
-            identity: {
-              name: 'OmenFi',
-              uri: 'https://omenfi.com',
-              icon: 'https://omenfi.com/icon-192.png',
-            },
-          });
-        }),
-        mwaTimeout
-      ]);
-
-      if (!authResult?.accounts?.[0]?.address) {
-        const detail = JSON.stringify(authResult)?.slice(0,100) || 'no accounts returned';
-        throw new Error('Authorization failed (' + detail + '). Please try again.');
+      const pubkey = window.mwaAdapter.publicKey?.toString();
+      if (!pubkey) {
+        throw new Error('Authorization failed. Please try again.');
       }
 
-      // MWA address can be Uint8Array, base64 string, or base58 string
-      // Handle all cases robustly
-      const rawAddress = authResult.accounts[0].address;
-      let pubkey;
-      if (typeof rawAddress === 'string') {
-        // Could be base64 encoded bytes or already base58
-        try {
-          // Try treating as base64 first (common MWA format)
-          const bytes = Uint8Array.from(atob(rawAddress), c => c.charCodeAt(0));
-          pubkey = new web3.PublicKey(bytes).toBase58();
-        } catch(e) {
-          // Already a base58 address string
-          pubkey = rawAddress;
-        }
-      } else {
-        // Uint8Array or Buffer
-        pubkey = new web3.PublicKey(rawAddress).toBase58();
-      }
-      if (!pubkey || pubkey.length < 32) throw new Error('Invalid public key from wallet.');
-
-      // Store auth token for subsequent signing
-      sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
-
+      sessionStorage.setItem('mwa_connected', '1');
       saveWallet(pubkey);
       await onWalletConnected(pubkey, 'seedvault');
 
@@ -2109,8 +2063,8 @@ async function sendSolPayment(assetId, lamports) {
   // Use whichever wallet the user connected with
   let provider;
   if (state.walletProvider === 'seedvault') {
-    // Seed Vault uses MWA transact for signing — handled below
-    provider = null; // will use mwaTransact path
+    // Seeker Wallet — uses mwaAdapter.sendTransaction handled below
+    provider = null;
   } else {
     provider = window.phantom?.solana || window.solana;
     if (!provider?.isPhantom) throw new Error('Phantom wallet not found. Please install Phantom.');
@@ -2218,50 +2172,16 @@ async function sendSolPayment(assetId, lamports) {
   let signature;
   try {
     if (state.walletProvider === 'seedvault') {
-      // Seed Vault Wallet — sign and send via MWA transact
-      // CRITICAL: mwaTransact must be called with the pre-built transaction
-      // The intent fires immediately, then we serialize inside the callback
-      if (!window.mwaTransact || typeof window.mwaTransact !== 'function') {
-        throw new Error('MWA transact not available — type: ' + typeof window.mwaTransact);
+      // Seeker Wallet — use SolanaMobileWalletAdapter.sendTransaction
+      // This uses the same adapter used for connect — no new intent, no new dialog
+      if (!window.mwaAdapter) {
+        throw new Error('Seeker Wallet not connected. Please reconnect.');
       }
-
-      const result = await window.mwaTransact(async (mwaWallet) => {
-        console.log('Inside mwaTransact callback — session established');
-
-        // Authorize fresh each time
-        const authResult = await mwaWallet.authorize({
-          chain: 'solana:mainnet',
-          identity: {
-            name: 'OmenFi',
-            uri: window.location.origin,
-            icon: 'icon-192.png',
-          },
-        });
-
-        // Pass Transaction object directly — web3js wrapper handles serialization internally
-        const results = await mwaWallet.signAndSendTransactions({
-          transactions: [transaction],
-        });
-        // results is an array of signature strings e.g. ["5FL8L3254..."]
-        const sig = Array.isArray(results) ? results[0] : results?.signatures?.[0];
-        return sig;
-      });
-
-      console.log('MWA result type:', typeof result, result instanceof Uint8Array ? 'Uint8Array' : Array.isArray(result) ? 'Array' : '', JSON.stringify(result)?.slice(0,80));
-      // result is already a base58 signature string from web3js wrapper
-      // e.g. "5FL8L3254eye1C9NfAY9tKxJ8pn96RbM4g..."
-      if (typeof result === 'string' && result.length > 40) {
-        signature = result;
-      } else if (result instanceof Uint8Array) {
-        // Fallback: convert Uint8Array to base58
-        const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-        let num = BigInt('0x' + Array.from(result).map(b => b.toString(16).padStart(2,'0')).join(''));
-        let enc = '';
-        while (num > 0n) { enc = BASE58[Number(num % 58n)] + enc; num = num / 58n; }
-        signature = enc;
-      } else {
-        throw new Error('Unexpected signature format: ' + typeof result);
-      }
+      const rpcConnection = new web3.Connection(
+        await proxyGetRpcUrl(),
+        'confirmed'
+      );
+      signature = await window.mwaAdapter.sendTransaction(transaction, rpcConnection);
 
     } else {
       // Phantom — use existing signAndSendTransaction
