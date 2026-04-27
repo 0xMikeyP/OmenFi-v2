@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v12.8
+   Build: 2026-04-17-v12.9
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v12.8');
+console.log('OmenFi build: 2026-04-14-v12.9');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -1899,9 +1899,21 @@ function renderConnect() {
 
     const web3 = window.solanaWeb3;
 
-    // Request local-network-access permission explicitly first
-    // This shows a proper tappable dialog separate from the frozen MWA dialog
-    // Chrome 138+ supports navigator.permissions.request({name:'local-network-access'})
+    // Step 1: Pre-warm the Seed Vault app by opening it via intent
+    // This gives it time to start its WebSocket server before transact() connects
+    console.log('MWA: pre-warming Seed Vault via intent...');
+    
+    // Open Seed Vault app via Android intent to wake it up
+    const warmupFrame = document.createElement('iframe');
+    warmupFrame.style.display = 'none';
+    warmupFrame.src = 'solana-wallet://';
+    document.body.appendChild(warmupFrame);
+    
+    // Wait 1.5 seconds for Seed Vault to fully start its WebSocket server
+    await new Promise(r => setTimeout(r, 1500));
+    warmupFrame.remove();
+    
+    // Step 2: Request local-network-access permission
     try {
       if (navigator.permissions && navigator.permissions.request) {
         const perm = await navigator.permissions.request({ name: 'local-network-access' });
@@ -1911,7 +1923,6 @@ function renderConnect() {
         }
       }
     } catch(permErr) {
-      // Permission API not supported or already granted — continue anyway
       console.log('MWA: permission request skipped:', permErr?.message);
     }
 
