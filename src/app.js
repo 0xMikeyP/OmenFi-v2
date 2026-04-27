@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v10.9
+   Build: 2026-04-17-v11.0
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v10.9');
+console.log('OmenFi build: 2026-04-14-v11.0');
 'use strict';
 
 // Production build — debug panel removed
@@ -3028,9 +3028,7 @@ async function renderTracker() {
               </div>
               <div style="display:flex;align-items:center;gap:8px">
                 <div class="period-prog-bg">
-                  <div class="period-prog-fill" style="width:${pct.toFixed(1)}%;background:${
-                    pct < 25 ? '#e63946' : pct < 50 ? '#ff8c2a' : pct < 75 ? '#ffbe0b' : '#00e87a'
-                  }"></div>
+                  <div class="period-prog-fill" style="width:${pct.toFixed(1)}%"></div>
                 </div>
                 <span style="font-family:var(--fm);font-size:0.62rem;color:var(--t3);white-space:nowrap">
                   $${fmt(p.invested)} / $${fmt(p.target)}
