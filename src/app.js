@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v12.7
+   Build: 2026-04-17-v12.8
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v12.7');
+console.log('OmenFi build: 2026-04-14-v12.8');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -1917,17 +1917,19 @@ function renderConnect() {
 
     console.log('MWA: calling transact() from direct tap handler');
 
-    window.mwaTransact(async (wallet) => {
-      console.log('MWA: inside callback');
-      return await wallet.authorize({
-        chain: 'solana:mainnet',
-        identity: {
-          name: 'OmenFi',
-          uri: 'https://omenfi.com',
-          icon: '/icon-192.png',
-        },
-      });
-    }).then(authResult => {
+    // Retry up to 3 times — Seed Vault WebSocket server needs a moment to start
+    const attemptMWA = (attemptsLeft) => {
+      window.mwaTransact(async (wallet) => {
+        console.log('MWA: inside callback, attempt', 4 - attemptsLeft);
+        return await wallet.authorize({
+          chain: 'solana:mainnet',
+          identity: {
+            name: 'OmenFi',
+            uri: 'https://omenfi.com',
+            icon: '/icon-192.png',
+          },
+        });
+      }).then(authResult => {
       if (!authResult?.accounts?.[0]?.address) throw new Error('Authorization failed. Please try again.');
       const rawAddress = authResult.accounts[0].address;
       let pubkey;
@@ -1942,13 +1944,24 @@ function renderConnect() {
       saveWallet(pubkey);
       return onWalletConnected(pubkey, 'seedvault');
     }).catch(err => {
-      btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
-      let msg = err.message || 'Connection failed';
-      if (msg.includes('User rejected') || msg.includes('cancelled') || msg.includes('declined')) msg = 'Connection cancelled.';
-      if (msg.includes('timed out')) msg = 'Connection timed out. Please try again.';
-      if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-      console.error('MWA connect error:', err?.message, err?.code);
-    });
+        const msg = err?.message || '';
+        console.warn('MWA attempt failed:', msg, 'attempts left:', attemptsLeft - 1);
+        if (attemptsLeft > 1 && (msg.includes('TIMEOUT') || msg.includes('timeout') || msg.includes('websocket') || msg.includes('connect'))) {
+          // Retry after 1.5s — gives Seed Vault server time to start
+          console.log('MWA: retrying in 1.5s...');
+          if (errEl) { errEl.textContent = 'Connecting... (attempt ' + (4 - attemptsLeft + 1) + ' of 3)'; errEl.style.display = 'block'; errEl.style.color = 'var(--accent)'; }
+          setTimeout(() => attemptMWA(attemptsLeft - 1), 1500);
+        } else {
+          btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+          let msg2 = err.message || 'Connection failed';
+          if (msg2.includes('User rejected') || msg2.includes('cancelled') || msg2.includes('declined')) msg2 = 'Connection cancelled.';
+          if (msg2.includes('TIMEOUT') || msg2.includes('timeout')) msg2 = 'Could not reach Seed Vault. Make sure it is installed and try again.';
+          if (errEl) { errEl.textContent = msg2; errEl.style.display = 'block'; errEl.style.color = 'var(--red)'; }
+          console.error('MWA connect failed after retries:', err?.message);
+        }
+      });
+    };
+    attemptMWA(3);
   });
 }
 
