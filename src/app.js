@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v11.1
+   Build: 2026-04-17-v11.2
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v11.1');
+console.log('OmenFi build: 2026-04-14-v11.2');
 'use strict';
 
 // Production build — debug panel removed
@@ -2600,13 +2600,16 @@ function fmt(n){
   if(abs>=1e6) return (n/1e6).toFixed(2)+'M';
   return Math.round(n).toLocaleString('en-US');
 }
-// Price formatter — keeps cents for low-value assets
+// Price formatter — smart precision, no unnecessary trailing zeros
 function fmtPrice(n){
   if(n==null||isNaN(n)) return '—';
-  if(n>=1000)  return Math.round(n).toLocaleString('en-US');
-  if(n>=100)   return n.toFixed(2);
-  if(n>=1)     return n.toFixed(4);
-  return n.toFixed(6); // sub-$1 assets like SHIB
+  if(n>=10000) return Math.round(n).toLocaleString('en-US');       // BTC: $95,000
+  if(n>=1000)  return n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:1}).replace(/\.0$/,''); // ETH: $3,241
+  if(n>=100)   return n.toFixed(2);                                // BNB: $412.34
+  if(n>=10)    return n.toFixed(2);                                // LINK: $9.49
+  if(n>=1)     return n.toFixed(3).replace(/0+$/,'').replace(/\.$/, ''); // ADA: $0.641
+  if(n>=0.01)  return n.toFixed(4).replace(/0+$/,'');              // HBAR: $0.0823
+  return n.toFixed(8).replace(/0+$/,'');                           // SHIB: $0.00001234
 }
 function fmtK(n){
   if(Math.abs(n)>=1e6) return (n/1e6).toFixed(1)+'M';
