@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v12.0
+   Build: 2026-04-17-v12.1
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v12.0');
+console.log('OmenFi build: 2026-04-14-v12.1');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -1878,7 +1878,7 @@ function renderConnect() {
         </svg>
         <div>
           <b>Seeker Wallet</b>
-          <span>${IS_ANDROID ? 'Tap Allow, approve in Seeker, then return here' : 'Solana Seeker device'}</span>
+          <span>${IS_ANDROID ? 'Solana Seeker · MWA' : 'Solana Seeker device'}</span>
         </div>
         <span style="margin-left:auto">→</span>
       </button>
@@ -1907,33 +1907,37 @@ async function doConnect(walletType = 'phantom') {
 
       const web3 = window.solanaWeb3;
 
-      console.log('MWA: preparing transact, releasing main thread first...');
+      // Pre-warm Chrome's Private Network Access permission
+      // by attempting a fetch to a known localhost port first.
+      // This lets Chrome show AND process the permission dialog
+      // before transact() is called, breaking the freeze catch-22.
+      console.log('MWA: pre-warming PNA permission...');
+      try {
+        // Port 8900 is common for MWA but any localhost fetch triggers PNA check
+        const ctrl = new AbortController();
+        setTimeout(() => ctrl.abort(), 500);
+        await fetch('http://localhost:8900/', { signal: ctrl.signal, mode: 'no-cors' });
+      } catch(e) {
+        // Expected to fail — we just needed Chrome to process the PNA check
+        console.log('MWA: PNA pre-warm done (expected error):', e?.name);
+      }
 
-      // Defer transact() call so Chrome can finish rendering the permission dialog
-      // and register touch events BEFORE we block the thread with the WebSocket wait
-      const authResult = await new Promise((resolve, reject) => {
-        setTimeout(async () => {
-          console.log('MWA: calling transact() after thread release');
-          try {
-            const result = await window.mwaTransact(async (wallet) => {
-              console.log('MWA: inside callback, wallet keys:', Object.keys(wallet||{}).join(','));
-              const auth = await wallet.authorize({
-                chain: 'solana:mainnet',
-                identity: {
-                  name: 'OmenFi',
-                  uri: 'https://omenfi.com',
-                  icon: '/icon-192.png',
-                },
-              });
-              console.log('MWA: authorize returned:', JSON.stringify(auth)?.slice(0,150));
-              return auth;
-            });
-            resolve(result);
-          } catch(e) {
-            console.error('MWA error:', e?.message, e?.code, JSON.stringify(e)?.slice(0,200));
-            reject(e);
-          }
-        }, 50); // 50ms delay — enough for Chrome to register touch events on the dialog
+      // Small delay to let Chrome process the permission grant
+      await new Promise(r => setTimeout(r, 200));
+
+      console.log('MWA: calling transact()...');
+      const authResult = await window.mwaTransact(async (wallet) => {
+        console.log('MWA: inside callback');
+        const auth = await wallet.authorize({
+          chain: 'solana:mainnet',
+          identity: {
+            name: 'OmenFi',
+            uri: 'https://omenfi.com',
+            icon: '/icon-192.png',
+          },
+        });
+        console.log('MWA: auth result:', JSON.stringify(auth)?.slice(0,100));
+        return auth;
       });
 
       if (!authResult?.accounts?.[0]?.address) {
