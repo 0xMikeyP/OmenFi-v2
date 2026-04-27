@@ -1570,26 +1570,20 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 }
 .tprog-bar-fill {
   height: 100%;
-  /* Gradient spans full track width — bar fill reveals it left to right */
-  position: relative;
   border-radius: 4px;
   transition: width 0.7s cubic-bezier(0.4,0,0.2,1);
-  overflow: visible;
-}
-.tprog-bar-fill::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; bottom: 0;
-  /* Fixed width matching the track — clip is handled by parent overflow:hidden */
-  width: calc(100vw);
-  background: linear-gradient(90deg,
+  /* Use background-size trick: gradient is painted on a wide canvas,
+     the fill width clips it — no pseudo-element needed */
+  background-image: linear-gradient(90deg,
     #e63946 0%,
     #ff6b35 25%,
     #ffbe0b 50%,
     #70e000 75%,
     #00e87a 100%
   );
-  border-radius: 4px;
+  background-size: 500px 100%;
+  background-repeat: no-repeat;
+  background-position: left center;
 }
 .tprog-months {
   display: flex;
@@ -1825,5 +1819,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
   height: 100%;
   border-radius: 2px;
   transition: width 0.4s ease;
+  background-image: linear-gradient(90deg,
+    #e63946 0%, #ff6b35 25%, #ffbe0b 50%, #70e000 75%, #00e87a 100%
+  );
+  background-size: 200px 100%;
+  background-repeat: no-repeat;
+  background-position: left center;
 }
 .period-buys { border-top: 1px solid rgba(255,255,255,0.04); }
