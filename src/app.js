@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v11.3
+   Build: 2026-04-17-v11.4
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v11.3');
+console.log('OmenFi build: 2026-04-14-v11.4');
 'use strict';
 
 // Production build — debug panel removed
@@ -1839,7 +1839,7 @@ function renderConnect() {
         </svg>
         <div>
           <b>Seeker Wallet</b>
-          <span>${IS_ANDROID ? 'Solana Seeker · MWA' : 'Solana Seeker device'}</span>
+          <span>${IS_ANDROID ? 'Tap Allow, approve in Seeker, then return here' : 'Solana Seeker device'}</span>
         </div>
         <span style="margin-left:auto">→</span>
       </button>
@@ -1868,18 +1868,25 @@ async function doConnect(walletType = 'phantom') {
 
       const web3 = window.solanaWeb3;
 
+      // Always clear stale MWA auth token — domain changed from netlify to omenfi.com
+      // Keeping old token causes silent auth failure with the permission dialog freeze
+      sessionStorage.removeItem('mwa_auth_token');
+
       // Add 30s timeout — if MWA never resolves (silent fail), unfreeze UI
       const mwaTimeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Wallet connection timed out. Please try again.')), 30000)
       );
 
+      // MWA on Android: after the permission dialog, the wallet app launches
+      // and Chrome is backgrounded. When user approves in wallet and returns
+      // to Chrome, the transact promise resolves. This is normal MWA flow.
       const authResult = await Promise.race([
         window.mwaTransact(async (wallet) => {
           return await wallet.authorize({
             chain: 'solana:mainnet',
             identity: {
               name: 'OmenFi',
-              uri: 'https://omenfi.com',   // must exactly match deployed origin
+              uri: 'https://omenfi.com',
               icon: 'https://omenfi.com/icon-192.png',
             },
           });
@@ -1888,7 +1895,8 @@ async function doConnect(walletType = 'phantom') {
       ]);
 
       if (!authResult?.accounts?.[0]?.address) {
-        throw new Error('Authorization failed. Please try again.');
+        const detail = JSON.stringify(authResult)?.slice(0,100) || 'no accounts returned';
+        throw new Error('Authorization failed (' + detail + '). Please try again.');
       }
 
       // MWA address can be Uint8Array, base64 string, or base58 string
@@ -1946,9 +1954,12 @@ async function doConnect(walletType = 'phantom') {
   } catch (err) {
     btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
     let msg = err.message || 'Connection failed';
-    if (msg.includes('User rejected') || msg.includes('cancelled')) msg = 'Connection cancelled.';
+    if (msg.includes('User rejected') || msg.includes('cancelled') || msg.includes('declined')) {
+      msg = 'Connection cancelled. Tap Seeker Wallet to try again.';
+    } else if (msg.includes('timed out')) {
+      msg = 'Connection timed out. After tapping Allow in the system dialog, return to OmenFi and try again.';
+    }
     if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-    console.error('Wallet connect error:', err);
   }
 }
 
