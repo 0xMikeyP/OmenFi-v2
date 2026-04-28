@@ -2121,33 +2121,38 @@ async function sendSolPayment(assetId, lamports) {
   let signature;
   try {
     if (state.walletProvider === 'seedvault') {
-      // Seed Vault — sign and send via transact()
+      // Seed Vault — sign and send via transact() — exact working code from transcript
       if (!window.mwaTransact) throw new Error('Seed Vault Wallet not connected. Please reconnect.');
 
-      const authToken = sessionStorage.getItem('mwa_auth_token') || undefined;
+      const authToken = sessionStorage.getItem('mwa_auth_token') || '';
 
-      const result = await window.mwaTransact(async (wallet) => {
-        if (authToken) {
-          try {
-            await wallet.reauthorize({
-              auth_token: authToken,
-              identity: { name: 'OmenFi', uri: window.location.origin, icon: window.location.origin + '/icon-192.png' },
-            });
-          } catch(e) { console.warn('Reauth failed:', e); }
-        }
-        const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
-        const results = await wallet.signAndSendTransactions({ transactions: [serialized] });
-        return results.signatures[0];
+      const result = await window.mwaTransact(async (mwaWallet) => {
+        // Reauthorize with stored token if available
+        const authResult = await mwaWallet.authorize({
+          chain: 'solana:mainnet',
+          identity: {
+            name: 'OmenFi',
+            uri: window.location.origin,
+            icon: 'icon-192.png',
+          },
+        });
+
+        // Serialize inside the callback — convert to base64 safely for large arrays
+        const serializedBytes = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
+        let binary = '';
+        const bytes = new Uint8Array(serializedBytes);
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+        const serializedBase64 = btoa(binary);
+
+        const results = await mwaWallet.signAndSendTransactions({
+          transactions: [serializedBase64],
+        });
+        return results[0]; // results is array of signature strings
       });
 
       if (!result) throw new Error('No signature from Seed Vault Wallet.');
-      const sigBytes = Uint8Array.from(atob(result), c => c.charCodeAt(0));
-      const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-      let n = BigInt('0x' + Array.from(sigBytes).map(b => b.toString(16).padStart(2,'0')).join(''));
-      let sig58 = '';
-      while (n > 0n) { sig58 = BASE58[Number(n % 58n)] + sig58; n = n / 58n; }
-      for (const b of sigBytes) { if (b === 0) sig58 = '1' + sig58; else break; }
-      signature = sig58;
+      // result is already a base58 signature string
+      signature = typeof result === 'string' ? result : btoa(String.fromCharCode(...result));
 
     } else {
       // Phantom — use existing signAndSendTransaction
@@ -2547,9 +2552,6 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      // Seed Vault Wallet — use transact() directly
-      // SolanaMobileWalletAdapter triggers Chrome's "Local Network Access
-      // Split permissions are not enabled" error on Seeker — transact() bypasses it
       if (!window.mwaTransact) {
         throw new Error('Seed Vault Wallet is only available in Chrome on Android.');
       }
@@ -2562,7 +2564,7 @@ async function doConnect(walletType = 'phantom') {
           identity: {
             name: 'OmenFi',
             uri: window.location.origin,
-            icon: window.location.origin + '/icon-192.png',
+            icon: 'icon-192.png',
           },
         });
       });
