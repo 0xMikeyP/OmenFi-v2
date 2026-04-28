@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v13.4
+   Build: 2026-04-17-v13.6
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v13.4');
+console.log('OmenFi build: 2026-04-14-v13.6');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2121,38 +2121,13 @@ async function sendSolPayment(assetId, lamports) {
   let signature;
   try {
     if (state.walletProvider === 'seedvault') {
-      // Seed Vault — sign and send via transact() — exact working code from transcript
-      if (!window.mwaTransact) throw new Error('Seed Vault Wallet not connected. Please reconnect.');
-
-      const authToken = sessionStorage.getItem('mwa_auth_token') || '';
-
-      const result = await window.mwaTransact(async (mwaWallet) => {
-        // Reauthorize with stored token if available
-        const authResult = await mwaWallet.authorize({
-          chain: 'solana:mainnet',
-          identity: {
-            name: 'OmenFi',
-            uri: window.location.origin,
-            icon: 'icon-192.png',
-          },
-        });
-
-        // Serialize inside the callback — convert to base64 safely for large arrays
-        const serializedBytes = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
-        let binary = '';
-        const bytes = new Uint8Array(serializedBytes);
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-        const serializedBase64 = btoa(binary);
-
-        const results = await mwaWallet.signAndSendTransactions({
-          transactions: [serializedBase64],
-        });
-        return results[0]; // results is array of signature strings
-      });
-
-      if (!result) throw new Error('No signature from Seed Vault Wallet.');
-      // result is already a base58 signature string
-      signature = typeof result === 'string' ? result : btoa(String.fromCharCode(...result));
+      // SolanaMobileWalletAdapter handles signing for web browsers
+      if (!window.mwaAdapter) throw new Error('Seed Vault Wallet not connected. Please reconnect.');
+      const conn = new web3.Connection(
+        'https://mainnet.helius-rpc.com/?api-key=98947ffb-7331-403d-850c-2e34a6e4f21f',
+        'confirmed'
+      );
+      signature = await window.mwaAdapter.sendTransaction(transaction, conn);
 
     } else {
       // Phantom — use existing signAndSendTransaction
@@ -2552,41 +2527,19 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      // Seed Vault Wallet — uses Mobile Wallet Adapter protocol
-      // window.mwaTransact is the transact function imported from
-      // @solana-mobile/mobile-wallet-adapter-protocol-web3js in main.js
-      if (!window.mwaTransact) {
-        throw new Error('MWA not available. Please refresh and try again.');
+      // Per official docs (docs.solanamobile.com/developers/mobile-wallet-adapter-web):
+      // Web browsers use SolanaMobileWalletAdapter — NOT raw transact()
+      // transact() is for React Native native apps only
+      if (!window.mwaAdapter) {
+        throw new Error('Seed Vault Wallet is only available in Chrome on Android.');
       }
 
-      // MWA transact opens the Seed Vault Wallet app via Android intent,
-      // establishes a secure WebSocket connection, and handles authorization
-      const authResult = await window.mwaTransact(async (mwaWallet) => {
-        const authorizationResult = await mwaWallet.authorize({
-          chain: 'solana:mainnet',
-          identity: {
-            name: 'OmenFi',
-            uri: window.location.origin,
-            icon: '/icon-192.png',
-          },
-        });
-        return authorizationResult;
-      });
+      // connect() handles the full MWA lifecycle for web browsers:
+      // fires Android intent → Seed Vault opens → user approves → returns pubkey
+      await window.mwaAdapter.connect();
 
-      if (!authResult?.accounts?.[0]?.address) {
-        throw new Error('Authorization failed. Please try again.');
-      }
-
-      // Decode the base64 public key returned by MWA
-      const addressBytes = authResult.accounts[0].address;
-      const web3 = window.solanaWeb3;
-      const pubkey = new web3.PublicKey(addressBytes).toString();
-
-      // Store the auth token for future signing sessions
-      sessionStorage.setItem('mwa_auth_token', JSON.stringify({
-        token: authResult.auth_token,
-        address: pubkey,
-      }));
+      const pubkey = window.mwaAdapter.publicKey?.toBase58();
+      if (!pubkey) throw new Error('Authorization failed. Please try again.');
 
       saveWallet(pubkey);
       await onWalletConnected(pubkey, 'seedvault');
