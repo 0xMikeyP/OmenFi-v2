@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v14.1
+   Build: 2026-04-17-v14.2
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v14.1');
+console.log('OmenFi build: 2026-04-14-v14.2');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2122,17 +2122,15 @@ async function sendSolPayment(assetId, lamports) {
   try {
     if (state.walletProvider === 'seedvault') {
       if (!window.mwaAdapter) throw new Error('Seed Vault Wallet not connected. Please reconnect.');
+      if (!window.mwaAdapter.publicKey) throw new Error('Seed Vault Wallet session expired. Please reconnect.');
 
       const conn = new web3.Connection(
         'https://mainnet.helius-rpc.com/?api-key=98947ffb-7331-403d-850c-2e34a6e4f21f',
         'confirmed'
       );
 
-      // sendTransaction opens Seed Vault for signing — pass the unsigned transaction
-      // The adapter handles authorization + signing + sending in one call
-      signature = await window.mwaAdapter.sendTransaction(transaction, conn, {
-        signers: [],
-      });
+      // sendTransaction opens Seed Vault for signing automatically
+      signature = await window.mwaAdapter.sendTransaction(transaction, conn);
 
     } else {
       // Phantom — use existing signAndSendTransaction
@@ -2565,7 +2563,9 @@ async function doConnect(walletType = 'phantom') {
           window.mwaAdapter.off('error', onError);
           const key = publicKey?.toBase58 ? publicKey.toBase58()
                     : window.mwaAdapter.publicKey?.toBase58();
-          resolve(key || null);
+          // Small tick to ensure adapter internal state fully settles
+          // before sendTransaction can use it for signing
+          setTimeout(() => resolve(key || null), 100);
         }
 
         function onError(err) {
