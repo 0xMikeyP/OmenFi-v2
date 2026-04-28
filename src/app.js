@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v15.2
+   Build: 2026-04-17-v15.3
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v15.2');
+console.log('OmenFi build: 2026-04-14-v15.3');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2223,18 +2223,28 @@ async function sendSolPayment(assetId, lamports) {
         return results;
       });
 
-      // Extract signature — results is array of base64 signatures
+      // Extract signature — signAndSendTransactions returns base64-encoded signatures
       const rawSig = Array.isArray(txSignatures) ? txSignatures[0] : txSignatures;
       if (!rawSig) throw new Error('No signature returned from Seed Vault Wallet.');
 
-      // Convert base64 signature to base58
-      if (typeof rawSig === 'string' && rawSig.length > 40 && !rawSig.includes('=')) {
-        // Already base58
-        signature = rawSig;
+      // Convert to base58 — handle base64 string or Uint8Array
+      let sigBytes;
+      if (typeof rawSig === 'string') {
+        // Base64 string — decode it
+        try {
+          // Ensure proper padding
+          const padded = rawSig + '=='.slice((rawSig.length * 3) % 4 || 4);
+          sigBytes = Uint8Array.from(atob(padded.replace(/-/g, '+').replace(/_/g, '/')), ch => ch.charCodeAt(0));
+        } catch(e) {
+          // Already base58 — use directly
+          signature = rawSig;
+          sigBytes = null;
+        }
       } else {
-        const sigBytes = typeof rawSig === 'string'
-          ? Uint8Array.from(atob(rawSig), ch => ch.charCodeAt(0))
-          : new Uint8Array(rawSig);
+        sigBytes = new Uint8Array(rawSig);
+      }
+
+      if (sigBytes) {
         const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
         let n = BigInt('0x' + Array.from(sigBytes).map(b => b.toString(16).padStart(2,'0')).join(''));
         let s = '';
