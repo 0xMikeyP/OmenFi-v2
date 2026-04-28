@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v14.5
+   Build: 2026-04-17-v14.6
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v14.5');
+console.log('OmenFi build: 2026-04-14-v14.6');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2823,8 +2823,9 @@ function calcPeriods(strategy) {
 
 // Render the full tracker tab
 async function renderTracker() {
+  try {
   const el = $('tracker-content');
-  if (!el) return;
+  if (!el) { console.error('renderTracker: #tracker-content not found'); return; }
 
   // Not connected
   if (!state.wallet) {
@@ -3082,6 +3083,11 @@ async function renderTracker() {
     const pill = e.target.closest('[data-strat-idx]');
     if (pill) trackerSetActive(parseInt(pill.dataset.stratIdx));
   });
+  } catch(e) {
+    console.error('renderTracker error:', e?.message, e?.stack?.slice(0,200));
+    const el = $('tracker-content');
+    if (el) el.innerHTML = `<div style="padding:40px;text-align:center;color:var(--red)">Tracker error: ${e?.message}</div>`;
+  }
 }
 
 
