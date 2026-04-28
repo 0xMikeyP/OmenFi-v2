@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v15.1
+   Build: 2026-04-17-v15.2
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v15.1');
+console.log('OmenFi build: 2026-04-14-v15.2');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2877,7 +2877,8 @@ function calcPeriods(strategy) {
     const invested = periodBuys.reduce((s, b) => s + Number(b.amount), 0);
     const isCurrentPeriod = pStart <= now && now <= pEnd;
     const isPast = pEnd < now && !isCurrentPeriod;
-    const hit = isPast ? invested >= target * 0.95 : null; // 5% tolerance for rounding
+    // Show hit for both past AND current period if target met (5% tolerance)
+    const hit = invested >= target * 0.95;
 
     periods.push({
       label:    periodLabel(pStart, pEnd),
@@ -3080,10 +3081,12 @@ async function renderTracker() {
 
       return periods.map((p, pi) => {
         const pct  = Math.min(100, (p.invested / p.target) * 100);
-        const statusColor = p.isCurrent ? 'var(--accent)' :
+        const statusColor = (p.isCurrent && p.hit) ? 'var(--green)' :
+                            p.isCurrent ? 'var(--accent)' :
                             p.hit === true ? 'var(--green)' :
                             p.hit === false ? 'var(--red)' : 'var(--t3)';
-        const statusIcon  = p.isCurrent ? '● Active' :
+        const statusIcon  = (p.isCurrent && p.hit) ? '✓ Hit' :
+                            p.isCurrent ? '● Active' :
                             p.hit === true ? '✓ Hit' :
                             p.hit === false ? '✗ Missed' : '';
 
