@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v15.0
+   Build: 2026-04-17-v15.1
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v15.0');
+console.log('OmenFi build: 2026-04-14-v15.1');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2814,7 +2814,11 @@ function trackerUnlockSlot() {
 // Each period has: label, start, end, target $, buys logged, total invested, hit/miss
 function calcPeriods(strategy) {
   const buys      = strategy.buys || [];
-  const startDate = new Date(strategy.startDate || buys[0]?.date || new Date());
+  // Parse startDate as local date to avoid UTC timezone offset
+  const startParts = (strategy.startDate || buys[0]?.date || '').split('-');
+  const startDate = startParts.length === 3
+    ? new Date(Number(startParts[0]), Number(startParts[1])-1, Number(startParts[2]), 0, 0, 0)
+    : new Date();
   startDate.setHours(0, 0, 0, 0);
   const now       = new Date();
   now.setHours(23, 59, 59, 999);
@@ -2863,8 +2867,10 @@ function calcPeriods(strategy) {
     pEnd.setHours(23, 59, 59, 999);
 
     // Find buys within this period
+    // Parse buy dates as local noon to avoid UTC midnight timezone issues
     const periodBuys = buys.filter(b => {
-      const bd = new Date(b.date); bd.setHours(12);
+      const parts = b.date.split('-');
+      const bd = new Date(Number(parts[0]), Number(parts[1])-1, Number(parts[2]), 12, 0, 0);
       return bd >= pStart && bd <= pEnd;
     });
 
