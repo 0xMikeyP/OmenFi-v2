@@ -21,6 +21,7 @@ export default defineConfig({
       '@solana/web3.js',
       '@solana-mobile/mobile-wallet-adapter-protocol',
       '@solana-mobile/mobile-wallet-adapter-protocol-web3js',
+      '@solana-mobile/wallet-adapter-mobile',
     ],
     esbuildOptions: {
       target: 'esnext',
