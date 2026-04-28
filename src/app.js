@@ -2552,32 +2552,42 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
+      // Seed Vault Wallet — uses Mobile Wallet Adapter protocol
+      // window.mwaTransact is the transact function imported from
+      // @solana-mobile/mobile-wallet-adapter-protocol-web3js in main.js
       if (!window.mwaTransact) {
-        throw new Error('Seed Vault Wallet is only available in Chrome on Android.');
+        throw new Error('MWA not available. Please refresh and try again.');
       }
 
-      const web3 = window.solanaWeb3;
-
-      const authResult = await window.mwaTransact(async (wallet) => {
-        return await wallet.authorize({
+      // MWA transact opens the Seed Vault Wallet app via Android intent,
+      // establishes a secure WebSocket connection, and handles authorization
+      const authResult = await window.mwaTransact(async (mwaWallet) => {
+        const authorizationResult = await mwaWallet.authorize({
           chain: 'solana:mainnet',
           identity: {
             name: 'OmenFi',
             uri: window.location.origin,
-            icon: 'icon-192.png',
+            icon: '/icon-192.png',
           },
         });
+        return authorizationResult;
       });
 
       if (!authResult?.accounts?.[0]?.address) {
         throw new Error('Authorization failed. Please try again.');
       }
 
-      // MWA returns address as Uint8Array — convert to base58
+      // Decode the base64 public key returned by MWA
       const addressBytes = authResult.accounts[0].address;
-      const pubkey = new web3.PublicKey(addressBytes).toBase58();
+      const web3 = window.solanaWeb3;
+      const pubkey = new web3.PublicKey(addressBytes).toString();
 
-      sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
+      // Store the auth token for future signing sessions
+      sessionStorage.setItem('mwa_auth_token', JSON.stringify({
+        token: authResult.auth_token,
+        address: pubkey,
+      }));
+
       saveWallet(pubkey);
       await onWalletConnected(pubkey, 'seedvault');
 
