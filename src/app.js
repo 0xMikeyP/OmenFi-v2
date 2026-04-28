@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v13.9
+   Build: 2026-04-17-v14.0
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v13.9');
+console.log('OmenFi build: 2026-04-14-v14.0');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2123,6 +2123,33 @@ async function sendSolPayment(assetId, lamports) {
     if (state.walletProvider === 'seedvault') {
       // SolanaMobileWalletAdapter handles signing for web browsers
       if (!window.mwaAdapter) throw new Error('Seed Vault Wallet not connected. Please reconnect.');
+
+      // Ensure adapter is connected before signing — it may have been recreated
+      if (!window.mwaAdapter.connected) {
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            window.mwaAdapter.off('connect', onConnect);
+            window.mwaAdapter.off('error', onError);
+            reject(new Error('Wallet reconnect timed out. Please try again.'));
+          }, 60000);
+          function onConnect() {
+            clearTimeout(timeout);
+            window.mwaAdapter.off('connect', onConnect);
+            window.mwaAdapter.off('error', onError);
+            resolve();
+          }
+          function onError(e) {
+            clearTimeout(timeout);
+            window.mwaAdapter.off('connect', onConnect);
+            window.mwaAdapter.off('error', onError);
+            reject(e);
+          }
+          window.mwaAdapter.on('connect', onConnect);
+          window.mwaAdapter.on('error', onError);
+          window.mwaAdapter.connect().catch(reject);
+        });
+      }
+
       const conn = new web3.Connection(
         'https://mainnet.helius-rpc.com/?api-key=98947ffb-7331-403d-850c-2e34a6e4f21f',
         'confirmed'
