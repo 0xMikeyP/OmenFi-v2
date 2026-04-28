@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v13.8
+   Build: 2026-04-17-v13.9
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v13.8');
+console.log('OmenFi build: 2026-04-14-v13.9');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2371,12 +2371,20 @@ function renderConnected(){
       unlockAllBtn.addEventListener('click', () => doUnlockAll());
     }
   }
-  $('disconnect').addEventListener('click',()=>{
-    state.wallet=null; state.walletProvider=null;
+  $('disconnect').addEventListener('click', async () => {
+    // Properly disconnect the MWA adapter so it can reconnect cleanly
+    if (window.mwaAdapter) {
+      try { await window.mwaAdapter.disconnect(); } catch(e) {}
+    }
+    state.wallet = null;
+    state.walletProvider = null;
     saveWallet(null);
-    saveWalletProvider(null); // clear persisted wallet type
-    $('wallet-btn-text').textContent='Connect';
+    saveWalletProvider(null);
+    $('wallet-btn-text').textContent = 'Connect';
     $('wallet-btn').classList.remove('connected');
+    state.unlockedAssets = new Set(['bitcoin']);
+    refreshAssetUI();
+    refreshUnlockAllBar();
     closeModal();
   });
 }
@@ -2529,6 +2537,30 @@ async function doConnect(walletType = 'phantom') {
     if (walletType === 'seedvault') {
       if (!window.mwaAdapter) {
         throw new Error('Seed Vault Wallet is only available in Chrome on Android.');
+      }
+
+      // Recreate the adapter fresh each time to avoid stale disconnected state
+      try {
+        const {
+          SolanaMobileWalletAdapter,
+          createDefaultAuthorizationResultCache,
+          createDefaultAddressSelector,
+          createDefaultWalletNotFoundHandler,
+        } = await import('@solana-mobile/wallet-adapter-mobile');
+
+        window.mwaAdapter = new SolanaMobileWalletAdapter({
+          addressSelector: createDefaultAddressSelector(),
+          appIdentity: {
+            name: 'OmenFi',
+            uri: 'https://omenfi.com',
+            icon: 'icon-192.png',
+          },
+          authorizationResultCache: createDefaultAuthorizationResultCache(),
+          cluster: 'mainnet-beta',
+          onWalletNotFound: createDefaultWalletNotFoundHandler(),
+        });
+      } catch(e) {
+        console.warn('Could not recreate adapter:', e.message);
       }
 
       // connect() fires the Android intent and opens Seed Vault for authorization.
