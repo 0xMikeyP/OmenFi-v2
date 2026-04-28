@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v14.2
+   Build: 2026-04-17-v14.4
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v14.2');
+console.log('OmenFi build: 2026-04-14-v14.4');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2110,27 +2110,86 @@ async function sendSolPayment(assetId, lamports) {
   } catch(e) { throw new Error('Memo instruction failed: ' + e.message); }
 
   try {
-    transaction = new web3.Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
-    console.log('Transaction created OK');
-    transaction.add(instruction);
-    console.log('Added transfer instruction');
-    transaction.add(memoInstruction);
-    console.log('Added memo instruction');
+    if (state.walletProvider === 'seedvault') {
+      // Use VersionedTransaction for SolanaMobileWalletAdapter
+      // Legacy Transaction with requireAllSignatures:true throws before wallet opens (known MWA v2.2 bug)
+      const messageV0 = new web3.TransactionMessage({
+        payerKey: fromPubkey,
+        recentBlockhash: blockhash,
+        instructions: [instruction, memoInstruction],
+      }).compileToV0Message();
+      transaction = new web3.VersionedTransaction(messageV0);
+      console.log('VersionedTransaction created OK');
+    } else {
+      transaction = new web3.Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
+      console.log('Transaction created OK');
+      transaction.add(instruction);
+      console.log('Added transfer instruction');
+      transaction.add(memoInstruction);
+      console.log('Added memo instruction');
+    }
   } catch(e) { throw new Error('Transaction build failed: ' + e.message); }
 
   let signature;
   try {
     if (state.walletProvider === 'seedvault') {
-      if (!window.mwaAdapter) throw new Error('Seed Vault Wallet not connected. Please reconnect.');
-      if (!window.mwaAdapter.publicKey) throw new Error('Seed Vault Wallet session expired. Please reconnect.');
+      if (!window.mwaTransact) throw new Error('Seed Vault Wallet not available. Please reconnect.');
 
-      const conn = new web3.Connection(
-        'https://mainnet.helius-rpc.com/?api-key=98947ffb-7331-403d-850c-2e34a6e4f21f',
-        'confirmed'
-      );
+      const storedAuthToken = sessionStorage.getItem('mwa_auth_token') || '';
 
-      // sendTransaction opens Seed Vault for signing automatically
-      signature = await window.mwaAdapter.sendTransaction(transaction, conn);
+      // One transact() session: reauthorize with stored token + sign + send
+      const txSignatures = await window.mwaTransact(async (wallet) => {
+        // Reauthorize using cached token — avoids re-showing the connect prompt
+        if (storedAuthToken) {
+          try {
+            await wallet.reauthorize({
+              auth_token: storedAuthToken,
+              identity: { name: 'OmenFi', uri: 'https://omenfi.com', icon: '/icon-192.png' },
+            });
+          } catch(e) {
+            // Token expired — do a fresh authorize
+            const fresh = await wallet.authorize({
+              chain: 'solana:mainnet',
+              identity: { name: 'OmenFi', uri: 'https://omenfi.com', icon: '/icon-192.png' },
+            });
+            sessionStorage.setItem('mwa_auth_token', fresh.auth_token || '');
+          }
+        } else {
+          // No stored token — fresh authorize
+          const fresh = await wallet.authorize({
+            chain: 'solana:mainnet',
+            identity: { name: 'OmenFi', uri: 'https://omenfi.com', icon: '/icon-192.png' },
+          });
+          sessionStorage.setItem('mwa_auth_token', fresh.auth_token || '');
+        }
+
+        // signAndSendTransactions: wallet signs and submits to network
+        // Works with both legacy Transaction and VersionedTransaction
+        const results = await wallet.signAndSendTransactions({
+          transactions: [transaction],
+        });
+        return results;
+      });
+
+      // Extract signature — results is array of base64 signatures
+      const rawSig = Array.isArray(txSignatures) ? txSignatures[0] : txSignatures;
+      if (!rawSig) throw new Error('No signature returned from Seed Vault Wallet.');
+
+      // Convert base64 signature to base58
+      if (typeof rawSig === 'string' && rawSig.length > 40 && !rawSig.includes('=')) {
+        // Already base58
+        signature = rawSig;
+      } else {
+        const sigBytes = typeof rawSig === 'string'
+          ? Uint8Array.from(atob(rawSig), ch => ch.charCodeAt(0))
+          : new Uint8Array(rawSig);
+        const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+        let n = BigInt('0x' + Array.from(sigBytes).map(b => b.toString(16).padStart(2,'0')).join(''));
+        let s = '';
+        while (n > 0n) { s = BASE58[Number(n % 58n)] + s; n = n / 58n; }
+        for (const b of sigBytes) { if (b === 0) s = '1' + s; else break; }
+        signature = s;
+      }
 
     } else {
       // Phantom — use existing signAndSendTransaction
@@ -2376,9 +2435,6 @@ function renderConnected(){
   }
   $('disconnect').addEventListener('click', async () => {
     // Properly disconnect the MWA adapter so it can reconnect cleanly
-    if (window.mwaAdapter) {
-      try { await window.mwaAdapter.disconnect(); } catch(e) {}
-    }
     state.wallet = null;
     state.walletProvider = null;
     saveWallet(null);
@@ -2538,193 +2594,89 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      if (!window.mwaAdapter) {
+      if (!window.mwaTransact) {
         throw new Error('Seed Vault Wallet is only available in Chrome on Android.');
       }
 
-      // Disconnect first if already connected to get a clean state
-      if (window.mwaAdapter.connected) {
-        try { await window.mwaAdapter.disconnect(); } catch(e) {}
-      }
-
-      // connect() fires the Android intent and opens Seed Vault for authorization.
-      // publicKey is populated via the 'connect' event — NOT synchronously after connect() resolves.
-      // We wrap in a Promise that resolves from the event to get the correct pubkey.
-      const pubkey = await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          window.mwaAdapter.off('connect', onConnect);
-          window.mwaAdapter.off('error', onError);
-          reject(new Error('Connection timed out. Please try again.'));
-        }, 60000);
-
-        function onConnect(publicKey) {
-          clearTimeout(timeout);
-          window.mwaAdapter.off('connect', onConnect);
-          window.mwaAdapter.off('error', onError);
-          const key = publicKey?.toBase58 ? publicKey.toBase58()
-                    : window.mwaAdapter.publicKey?.toBase58();
-          // Small tick to ensure adapter internal state fully settles
-          // before sendTransaction can use it for signing
-          setTimeout(() => resolve(key || null), 100);
-        }
-
-        function onError(err) {
-          clearTimeout(timeout);
-          window.mwaAdapter.off('connect', onConnect);
-          window.mwaAdapter.off('error', onError);
-          reject(err);
-        }
-
-        window.mwaAdapter.on('connect', onConnect);
-        window.mwaAdapter.on('error', onError);
-        window.mwaAdapter.connect().catch(reject);
+      // transact() opens one MWA session: authorize + get pubkey
+      // This is the correct pattern for vanilla JS (non-React) web apps
+      const authResult = await window.mwaTransact(async (wallet) => {
+        return await wallet.authorize({
+          chain: 'solana:mainnet',
+          identity: {
+            name: 'OmenFi',
+            uri: 'https://omenfi.com',
+            icon: '/icon-192.png',
+          },
+        });
       });
 
-      if (!pubkey) throw new Error('Authorization failed. Please try again.');
+      if (!authResult?.accounts?.[0]?.address) {
+        throw new Error('Authorization failed. Please try again.');
+      }
 
+      const web3 = window.solanaWeb3;
+      const addressBytes = authResult.accounts[0].address;
+      const pubkey = new web3.PublicKey(addressBytes).toBase58();
+      if (!pubkey) throw new Error('Invalid public key from wallet.');
+
+      // Store auth token for the signing session
+      sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
       saveWallet(pubkey);
       await onWalletConnected(pubkey, 'seedvault');
 
     } else {
-      // Phantom
-      if (isPhantomInjected()) {
-        const provider = window.phantom?.solana || window.solana;
-
-        if (provider.publicKey) {
-          const pubkey = provider.publicKey.toString();
-          saveWallet(pubkey);
-          await onWalletConnected(pubkey, 'phantom');
-          return;
-        }
-
-        sessionStorage.setItem('connecting', '1');
-        const resp = await provider.connect();
-        sessionStorage.removeItem('connecting');
-        const pubkey = resp.publicKey.toString();
-        saveWallet(pubkey);
-        await onWalletConnected(pubkey, 'phantom');
-      } else if (IS_ANDROID) {
-        const url = encodeURIComponent(window.location.href);
-        window.location.href = `https://phantom.app/ul/browse/${url}?ref=${url}`;
-      } else {
-        window.open('https://phantom.app', '_blank');
-        throw new Error('Phantom not detected. Install the Phantom extension and refresh.');
-      }
+      // Phantom — use existing signAndSendTransaction
+      const result = await provider.signAndSendTransaction(transaction);
+      signature = result.signature || result;
     }
   } catch (err) {
-    btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
-    let msg = err.message || 'Connection failed';
-    if (msg.includes('User rejected') || msg.includes('cancelled')) msg = 'Connection cancelled.';
-    if (msg.includes('timed out')) msg = 'Connection timed out. Make sure Seed Vault Wallet is installed.';
-    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-    console.error('Wallet connect error:', err);
-  }
-}
-
-// ============================================
-// UI HELPERS
-// ============================================
-function showLoad(on){ $('loading-state').style.display=on?'flex':'none'; $('run-btn').disabled=on; $('run-btn').style.opacity=on?'0.45':'1'; }
-function setMsg(m){ $('loading-msg').textContent=m; }
-function showErr(m){ $('error-msg').textContent=m; $('error-state').style.display='flex'; showLoad(false); }
-function clearErr(){ $('error-state').style.display='none'; }
-function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
-
-function fmt(n){
-  if(n==null||isNaN(n)) return '—';
-  const abs = Math.abs(n);
-  if(abs>=1e9) return (n/1e9).toFixed(2)+'B';
-  if(abs>=1e6) return (n/1e6).toFixed(2)+'M';
-  return Math.round(n).toLocaleString('en-US');
-}
-// Price formatter — smart precision, no unnecessary trailing zeros
-function fmtPrice(n){
-  if(n==null||isNaN(n)) return '—';
-  if(n>=10000) return Math.round(n).toLocaleString('en-US');       // BTC: $95,000
-  if(n>=1000)  return n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:1}).replace(/\.0$/,''); // ETH: $3,241
-  if(n>=100)   return n.toFixed(2);                                // BNB: $412.34
-  if(n>=10)    return n.toFixed(2);                                // LINK: $9.49
-  if(n>=1)     return n.toFixed(3).replace(/0+$/,'').replace(/\.$/, ''); // ADA: $0.641
-  if(n>=0.01)  return n.toFixed(4).replace(/0+$/,'');              // HBAR: $0.0823
-  return n.toFixed(8).replace(/0+$/,'');                           // SHIB: $0.00001234
-}
-function fmtK(n){
-  if(Math.abs(n)>=1e6) return (n/1e6).toFixed(1)+'M';
-  if(Math.abs(n)>=1e3) return (n/1e3).toFixed(0)+'K';
-  return n.toFixed(0);
-}
-
-function fmtCoins(n){
-  if(!n||isNaN(n)) return '—';
-  // Abbreviate large numbers to keep them from overflowing cells
-  if(n>=1_000_000_000) return (n/1_000_000_000).toFixed(2)+'B';
-  if(n>=1_000_000)     return (n/1_000_000).toFixed(2)+'M';
-  if(n>=10_000)        return (n/1_000).toFixed(2)+'K';
-  if(n>=1_000)         return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  if(n>=1)             return n.toFixed(4);
-  return n.toFixed(8);
-}
-
-// ============================================
-// DCA TRACKER
-// ============================================
-
-const TRACKER_STORAGE_KEY = 'omenfi_tracker_v1';
-const TRACKER_FREE_SLOTS   = 1;  // 1 free strategy
-const TRACKER_PAID_PRICE   = 0.05; // SOL per additional strategy
-
-// Load tracker data — localStorage first, cloud fallback
-function trackerLoad() {
-  try {
-    return JSON.parse(localStorage.getItem(TRACKER_STORAGE_KEY) || '{}');
-  } catch { return {}; }
-}
-
-// Save tracker data — localStorage immediately, cloud in background
-function trackerSave(data) {
-  // 1. Save locally right away — instant, no wait
-  try { localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(data)); } catch {}
-
-  // 2. Sync to cloud in background — don't await, don't block UI
-  if (state.wallet) {
-    const walletData = data[state.wallet];
-    if (walletData) {
-      trackerCloudSync(state.wallet, walletData).catch(() => {});
+    // Log the full error object so we can see what MWA actually returns
+    console.error('sendSolPayment raw error:', JSON.stringify(err), 'message:', err?.message, 'code:', err?.code, 'type:', typeof err);
+    if (err.code === 4001 || err.message?.includes('User rejected') || err.message?.includes('cancelled')) {
+      throw new Error('Transaction cancelled.');
     }
+    // Convert empty objects or non-Error throws to readable messages
+    const msg = err?.message || err?.errorMessage || err?.error || JSON.stringify(err);
+    throw new Error('Payment failed: ' + (msg || 'Unknown error from wallet'));
   }
+
+  if (!signature) throw new Error('No signature returned from wallet.');
+  console.log('Final signature:', signature, 'length:', signature?.length, 'valid base58:', /^[1-9A-HJ-NP-Za-km-z]{80,100}$/.test(signature || ''));
+
+  let confirmed = false;
+  for (let i = 0; i < 30; i++) {
+    const statusResult = await proxyFetch('getSignatureStatuses', [[signature]]);
+    const status = statusResult?.value?.[0];
+    if (status && !status.err && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized')) {
+      confirmed = true; break;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  if (!confirmed) throw new Error('Transaction confirmation timed out. Please check your wallet.');
+  return signature;
 }
 
-// Push data to Netlify Blobs (fire and forget)
-async function trackerCloudSync(walletAddress, walletData) {
-  try {
-    await fetch(`/.netlify/functions/tracker-sync?wallet=${walletAddress}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: walletData }),
-    });
-  } catch(e) {
-    // Silent fail — localStorage still has the data
-  }
-}
-
-// Load from cloud and merge with localStorage
-// Called on wallet connect — restores data on new device
 async function trackerCloudLoad(walletAddress) {
   try {
-    const res = await fetch(`/.netlify/functions/tracker-sync?wallet=${walletAddress}`);
+    const res = await fetch('/.netlify/functions/tracker-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'load', wallet: walletAddress }),
+    });
     if (!res.ok) return null;
-    const { data } = await res.json();
-    if (!data) return null;
+    const data = await res.json();
+    if (!data?.success) return null;
 
-    // Merge: cloud data is newer if its updatedAt is more recent
+    const cloudData = data.data;
+    const cloudUpdated = cloudData?.lastUpdated || 0;
     const local = trackerLoad();
     const localData = local[walletAddress];
-    const cloudUpdated = data.updatedAt || 0;
-    const localUpdated = localData?.updatedAt || 0;
+    const localUpdated = localData?.lastUpdated || 0;
 
-    if (cloudUpdated > localUpdated) {
-      // Cloud is newer — update localStorage
-      local[walletAddress] = data;
+    if (cloudData && cloudUpdated > localUpdated) {
+      const local = trackerLoad();
+      local[walletAddress] = cloudData;
       try { localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(local)); } catch {}
       console.log('Tracker: restored from cloud');
       return data;
