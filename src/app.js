@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v14.7
+   Build: 2026-04-17-v14.9
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v14.7');
+console.log('OmenFi build: 2026-04-14-v14.9');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -108,6 +108,55 @@ const MONTHS_FULL = ['January','February','March','April','May','June','July','A
 // ---- Local date helpers (no UTC offset issues) ----
 const pad = n => String(n).padStart(2,'0');
 function localStr(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+
+// Utility helpers
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function showErr(msg) {
+  const el = $('error-msg');
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+function clearErr() {
+  const el = $('error-msg');
+  if (el) { el.textContent = ''; el.style.display = 'none'; }
+}
+function showLoad(show) {
+  const el = $('loading-state');
+  if (el) el.style.display = show ? 'flex' : 'none';
+}
+function setMsg(msg) {
+  const el = $('loading-msg');
+  if (el) el.textContent = msg;
+}
+
+// Formatting helpers
+function fmtPrice(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  if (n >= 1)    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (n >= 0.01) return n.toFixed(4);
+  return n.toFixed(6);
+}
+function fmtK(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  if (Math.abs(n) >= 1000000) return (n/1000000).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1000)    return (n/1000).toFixed(1) + 'K';
+  return n.toFixed(2);
+}
+function fmtCoins(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  if (n >= 1)    return n.toFixed(4);
+  if (n >= 0.01) return n.toFixed(6);
+  return n.toFixed(8);
+}
+
+// General number formatter for dollar amounts
+function fmt(n) {
+  if (n === null || n === undefined || isNaN(n)) return '0';
+  return Math.abs(n) >= 1000
+    ? n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+    : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function parseLocal(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
 function today() { return localStr(new Date()); }
 function yesterday() { const d = new Date(); d.setDate(d.getDate()-1); return localStr(d); }
