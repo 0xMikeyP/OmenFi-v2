@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v14.6
+   Build: 2026-04-17-v14.7
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v14.6');
+console.log('OmenFi build: 2026-04-14-v14.7');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2740,6 +2740,27 @@ function calcTrackerStats(strategy, livePrice) {
   return { totalInvested, totalCoins, avgEntry, currentValue, pnl, pnlPct, progressPct, completedBuys, expectedBuys: Math.round(expectedBuys), expectedDollars, monthsElapsed: Math.ceil(daysElapsed/30.44) };
 }
 
+// ============================================
+// DCA TRACKER — Storage helpers
+// ============================================
+const TRACKER_STORAGE_KEY = 'omenfi_tracker_v1';
+const TRACKER_FREE_SLOTS   = 1;
+const TRACKER_PAID_PRICE   = 0.05;
+
+function trackerLoad() {
+  try { return JSON.parse(localStorage.getItem(TRACKER_STORAGE_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function trackerSave(data) {
+  try { localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(data)); } catch {}
+}
+
+function trackerUnlockSlot() {
+  // Defer to the full implementation below
+  trackerUnlockSlotFull();
+}
+
 // Generate all DCA periods from startDate to today
 // Each period has: label, start, end, target $, buys logged, total invested, hit/miss
 function calcPeriods(strategy) {
@@ -3219,7 +3240,7 @@ function trackerDeleteStrategy(stratIdx) {
   renderTracker();
 }
 
-async function trackerUnlockSlot() {
+async function trackerUnlockSlotFull() {
   if (!state.wallet) { openWalletModal(); return; }
   // Use existing payment system — assetId 'tracker-slot' with special handling
   // For now show a simple confirmation modal
@@ -3254,4 +3275,16 @@ async function trackerUnlockSlot() {
     }
   });
   $('tracker-cancel-btn').addEventListener('click', closeModal);
+}
+
+async function trackerCloudSync(walletAddress, walletData) {
+  try {
+    await fetch('/.netlify/functions/tracker-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'save', wallet: walletAddress, data: walletData }),
+    });
+  } catch(e) {
+    console.warn('trackerCloudSync failed:', e.message);
+  }
 }
