@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v15.3
+   Build: 2026-04-17-v15.4
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v15.3');
+console.log('OmenFi build: 2026-04-14-v15.4');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2223,28 +2223,31 @@ async function sendSolPayment(assetId, lamports) {
         return results;
       });
 
-      // Extract signature — signAndSendTransactions returns base64-encoded signatures
+      // Extract signature from results
       const rawSig = Array.isArray(txSignatures) ? txSignatures[0] : txSignatures;
       if (!rawSig) throw new Error('No signature returned from Seed Vault Wallet.');
 
-      // Convert to base58 — handle base64 string or Uint8Array
-      let sigBytes;
-      if (typeof rawSig === 'string') {
-        // Base64 string — decode it
+      // Convert to base58 string for verification
+      // web3js wrapper may return base58 string or base64 — handle both
+      if (typeof rawSig === 'string' && /^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(rawSig)) {
+        // Already valid base58 signature
+        signature = rawSig;
+      } else if (typeof rawSig === 'string') {
+        // Base64 encoded — convert to base58
         try {
-          // Ensure proper padding
-          const padded = rawSig + '=='.slice((rawSig.length * 3) % 4 || 4);
-          sigBytes = Uint8Array.from(atob(padded.replace(/-/g, '+').replace(/_/g, '/')), ch => ch.charCodeAt(0));
+          const sigBytes = Uint8Array.from(atob(rawSig), ch => ch.charCodeAt(0));
+          const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+          let n = BigInt('0x' + Array.from(sigBytes).map(b => b.toString(16).padStart(2,'0')).join(''));
+          let s = '';
+          while (n > 0n) { s = BASE58[Number(n % 58n)] + s; n = n / 58n; }
+          for (const b of sigBytes) { if (b === 0) s = '1' + s; else break; }
+          signature = s;
         } catch(e) {
-          // Already base58 — use directly
-          signature = rawSig;
-          sigBytes = null;
+          signature = rawSig; // use as-is if conversion fails
         }
       } else {
-        sigBytes = new Uint8Array(rawSig);
-      }
-
-      if (sigBytes) {
+        // Uint8Array — convert to base58
+        const sigBytes = new Uint8Array(rawSig);
         const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
         let n = BigInt('0x' + Array.from(sigBytes).map(b => b.toString(16).padStart(2,'0')).join(''));
         let s = '';
@@ -2678,9 +2681,23 @@ async function doConnect(walletType = 'phantom') {
       }
 
       const web3 = window.solanaWeb3;
-      const addressBytes = authResult.accounts[0].address;
-      const pubkey = new web3.PublicKey(addressBytes).toBase58();
-      if (!pubkey) throw new Error('Invalid public key from wallet.');
+      // The web3js wrapper handles address format internally
+      // Try base64 decode first (raw MWA protocol), fall back to direct use
+      const rawAddress = authResult.accounts[0].address;
+      let pubkey;
+      if (rawAddress instanceof Uint8Array || Array.isArray(rawAddress)) {
+        pubkey = new web3.PublicKey(rawAddress).toBase58();
+      } else if (typeof rawAddress === 'string') {
+        try {
+          const bytes = Uint8Array.from(atob(rawAddress), c => c.charCodeAt(0));
+          pubkey = new web3.PublicKey(bytes).toBase58();
+        } catch(e) {
+          pubkey = rawAddress; // already base58
+        }
+      } else {
+        pubkey = new web3.PublicKey(rawAddress).toBase58();
+      }
+      if (!pubkey || pubkey.length < 32) throw new Error('Invalid public key from wallet.');
 
       // Store auth token for the signing session
       sessionStorage.setItem('mwa_auth_token', authResult.auth_token || '');
@@ -2688,35 +2705,37 @@ async function doConnect(walletType = 'phantom') {
       await onWalletConnected(pubkey, 'seedvault');
 
     } else {
-      // Phantom — use existing signAndSendTransaction
-      const result = await provider.signAndSendTransaction(transaction);
-      signature = result.signature || result;
+      // Phantom
+      if (isPhantomInjected()) {
+        const provider = window.phantom?.solana || window.solana;
+        if (provider.publicKey) {
+          const pk = provider.publicKey.toString();
+          saveWallet(pk);
+          await onWalletConnected(pk, 'phantom');
+          return;
+        }
+        sessionStorage.setItem('connecting', '1');
+        const resp = await provider.connect();
+        sessionStorage.removeItem('connecting');
+        const pk = resp.publicKey.toString();
+        saveWallet(pk);
+        await onWalletConnected(pk, 'phantom');
+      } else if (IS_ANDROID) {
+        const url = encodeURIComponent(window.location.href);
+        window.location.href = `https://phantom.app/ul/browse/${url}?ref=${url}`;
+      } else {
+        window.open('https://phantom.app', '_blank');
+        throw new Error('Phantom not detected. Install Phantom and refresh.');
+      }
     }
-  } catch (err) {
-    // Log the full error object so we can see what MWA actually returns
-    console.error('sendSolPayment raw error:', JSON.stringify(err), 'message:', err?.message, 'code:', err?.code, 'type:', typeof err);
-    if (err.code === 4001 || err.message?.includes('User rejected') || err.message?.includes('cancelled')) {
-      throw new Error('Transaction cancelled.');
-    }
-    // Convert empty objects or non-Error throws to readable messages
-    const msg = err?.message || err?.errorMessage || err?.error || JSON.stringify(err);
-    throw new Error('Payment failed: ' + (msg || 'Unknown error from wallet'));
+  } catch(err) {
+    btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+    let msg = err?.message || 'Connection failed';
+    if (msg.includes('User rejected') || msg.includes('cancelled')) msg = 'Connection cancelled.';
+    if (msg.includes('timed out')) msg = 'Connection timed out. Please try again.';
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    console.error('Wallet connect error:', err?.message);
   }
-
-  if (!signature) throw new Error('No signature returned from wallet.');
-  console.log('Final signature:', signature, 'length:', signature?.length, 'valid base58:', /^[1-9A-HJ-NP-Za-km-z]{80,100}$/.test(signature || ''));
-
-  let confirmed = false;
-  for (let i = 0; i < 30; i++) {
-    const statusResult = await proxyFetch('getSignatureStatuses', [[signature]]);
-    const status = statusResult?.value?.[0];
-    if (status && !status.err && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized')) {
-      confirmed = true; break;
-    }
-    await new Promise(r => setTimeout(r, 1000));
-  }
-  if (!confirmed) throw new Error('Transaction confirmation timed out. Please check your wallet.');
-  return signature;
 }
 
 async function trackerCloudLoad(walletAddress) {
