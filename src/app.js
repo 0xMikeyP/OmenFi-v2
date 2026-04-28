@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v13.6
+   Build: 2026-04-17-v13.8
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v13.6');
+console.log('OmenFi build: 2026-04-14-v13.8');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2527,18 +2527,41 @@ async function doConnect(walletType = 'phantom') {
 
   try {
     if (walletType === 'seedvault') {
-      // Per official docs (docs.solanamobile.com/developers/mobile-wallet-adapter-web):
-      // Web browsers use SolanaMobileWalletAdapter — NOT raw transact()
-      // transact() is for React Native native apps only
       if (!window.mwaAdapter) {
         throw new Error('Seed Vault Wallet is only available in Chrome on Android.');
       }
 
-      // connect() handles the full MWA lifecycle for web browsers:
-      // fires Android intent → Seed Vault opens → user approves → returns pubkey
-      await window.mwaAdapter.connect();
+      // connect() fires the Android intent and opens Seed Vault for authorization.
+      // publicKey is populated via the 'connect' event — NOT synchronously after connect() resolves.
+      // We wrap in a Promise that resolves from the event to get the correct pubkey.
+      const pubkey = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          window.mwaAdapter.off('connect', onConnect);
+          window.mwaAdapter.off('error', onError);
+          reject(new Error('Connection timed out. Please try again.'));
+        }, 60000);
 
-      const pubkey = window.mwaAdapter.publicKey?.toBase58();
+        function onConnect(publicKey) {
+          clearTimeout(timeout);
+          window.mwaAdapter.off('connect', onConnect);
+          window.mwaAdapter.off('error', onError);
+          const key = publicKey?.toBase58 ? publicKey.toBase58()
+                    : window.mwaAdapter.publicKey?.toBase58();
+          resolve(key || null);
+        }
+
+        function onError(err) {
+          clearTimeout(timeout);
+          window.mwaAdapter.off('connect', onConnect);
+          window.mwaAdapter.off('error', onError);
+          reject(err);
+        }
+
+        window.mwaAdapter.on('connect', onConnect);
+        window.mwaAdapter.on('error', onError);
+        window.mwaAdapter.connect().catch(reject);
+      });
+
       if (!pubkey) throw new Error('Authorization failed. Please try again.');
 
       saveWallet(pubkey);
