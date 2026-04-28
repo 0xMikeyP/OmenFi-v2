@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v14.4
+   Build: 2026-04-17-v14.5
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v14.4');
+console.log('OmenFi build: 2026-04-14-v14.5');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -70,6 +70,9 @@ function isValidDate(d) {
 
 const CC_BASE   = 'https://min-api.cryptocompare.com/data/v2';
 const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+// Utility sleep function
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Assets ordered by market cap (largest first)
 const ASSETS = {
