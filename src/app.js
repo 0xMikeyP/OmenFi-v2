@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v14.0
+   Build: 2026-04-17-v14.1
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v14.0');
+console.log('OmenFi build: 2026-04-14-v14.1');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2121,40 +2121,18 @@ async function sendSolPayment(assetId, lamports) {
   let signature;
   try {
     if (state.walletProvider === 'seedvault') {
-      // SolanaMobileWalletAdapter handles signing for web browsers
       if (!window.mwaAdapter) throw new Error('Seed Vault Wallet not connected. Please reconnect.');
-
-      // Ensure adapter is connected before signing — it may have been recreated
-      if (!window.mwaAdapter.connected) {
-        await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            window.mwaAdapter.off('connect', onConnect);
-            window.mwaAdapter.off('error', onError);
-            reject(new Error('Wallet reconnect timed out. Please try again.'));
-          }, 60000);
-          function onConnect() {
-            clearTimeout(timeout);
-            window.mwaAdapter.off('connect', onConnect);
-            window.mwaAdapter.off('error', onError);
-            resolve();
-          }
-          function onError(e) {
-            clearTimeout(timeout);
-            window.mwaAdapter.off('connect', onConnect);
-            window.mwaAdapter.off('error', onError);
-            reject(e);
-          }
-          window.mwaAdapter.on('connect', onConnect);
-          window.mwaAdapter.on('error', onError);
-          window.mwaAdapter.connect().catch(reject);
-        });
-      }
 
       const conn = new web3.Connection(
         'https://mainnet.helius-rpc.com/?api-key=98947ffb-7331-403d-850c-2e34a6e4f21f',
         'confirmed'
       );
-      signature = await window.mwaAdapter.sendTransaction(transaction, conn);
+
+      // sendTransaction opens Seed Vault for signing — pass the unsigned transaction
+      // The adapter handles authorization + signing + sending in one call
+      signature = await window.mwaAdapter.sendTransaction(transaction, conn, {
+        signers: [],
+      });
 
     } else {
       // Phantom — use existing signAndSendTransaction
@@ -2566,28 +2544,9 @@ async function doConnect(walletType = 'phantom') {
         throw new Error('Seed Vault Wallet is only available in Chrome on Android.');
       }
 
-      // Recreate the adapter fresh each time to avoid stale disconnected state
-      try {
-        const {
-          SolanaMobileWalletAdapter,
-          createDefaultAuthorizationResultCache,
-          createDefaultAddressSelector,
-          createDefaultWalletNotFoundHandler,
-        } = await import('@solana-mobile/wallet-adapter-mobile');
-
-        window.mwaAdapter = new SolanaMobileWalletAdapter({
-          addressSelector: createDefaultAddressSelector(),
-          appIdentity: {
-            name: 'OmenFi',
-            uri: 'https://omenfi.com',
-            icon: 'icon-192.png',
-          },
-          authorizationResultCache: createDefaultAuthorizationResultCache(),
-          cluster: 'mainnet-beta',
-          onWalletNotFound: createDefaultWalletNotFoundHandler(),
-        });
-      } catch(e) {
-        console.warn('Could not recreate adapter:', e.message);
+      // Disconnect first if already connected to get a clean state
+      if (window.mwaAdapter.connected) {
+        try { await window.mwaAdapter.disconnect(); } catch(e) {}
       }
 
       // connect() fires the Android intent and opens Seed Vault for authorization.
