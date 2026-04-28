@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v14.9
+   Build: 2026-04-17-v15.0
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v14.9');
+console.log('OmenFi build: 2026-04-14-v15.0');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -3061,7 +3061,7 @@ async function renderTracker() {
         </div>
         <div class="tlog-field">
           <label>Date</label>
-          <input type="date" id="tlog-date" value="${new Date().toISOString().split('T')[0]}">
+          <input type="date" id="tlog-date" value="${today()}">
         </div>
       </div>
       <button class="tlog-submit" id="tlog-submit-btn">+ Log This Buy</button>
@@ -3247,7 +3247,7 @@ function trackerSetActive(idx) {
 function trackerLogBuy(stratIdx) {
   const amount = parseFloat($('tlog-amount')?.value);
   const price  = parseFloat($('tlog-price')?.value);
-  const date   = $('tlog-date')?.value || new Date().toISOString().split('T')[0];
+  const date   = $('tlog-date')?.value || today();
 
   if (!amount || amount <= 0 || !price || price <= 0) {
     alert('Please enter a valid amount and price.');
