@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v15.8
+   Build: 2026-04-17-v15.9
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v15.8');
+console.log('OmenFi build: 2026-04-14-v15.9');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
@@ -1746,13 +1746,12 @@ function renderMonthlyHeatmap(monthly,yr){
   }
   const maxAbs=Math.max(...data.map(s=>Math.abs(s.avg)),1);
   $('cal-heatmap').innerHTML=data.map((s,m)=>{
-    const cls=s.avg>1.5?'pos':s.avg<-1.5?'neg':'neu';
+    const cls=s.avg>0?'pos':'neg';
     const sign=s.avg>=0?'+':'';
     const int=Math.min(1,Math.abs(s.avg)/maxAbs);
     return `<div class="hm-cell ${cls}" data-m="${m}" style="--int:${int}">
       <div class="hm-name">${MONTHS[m]}</div>
       <div class="hm-ret">${sign}${s.avg.toFixed(1)}%</div>
-      <div class="hm-win" title="Closed positive in ${s.count>0?Math.round(s.winRate*s.count/100)+' of '+s.count+' years':0} years">${s.count>0?Math.round(s.winRate)+'% yrs+':'—'}</div>
       <div class="hm-bar"></div>
     </div>`;
   }).join('');
