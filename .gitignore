@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output — never commit dist, Netlify builds from source
+dist/
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.production
+.env.development
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Vite cache
+.vite/
