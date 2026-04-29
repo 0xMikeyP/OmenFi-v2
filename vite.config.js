@@ -4,11 +4,11 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills'
 export default defineConfig({
   plugins: [
     nodePolyfills({
-      // Needed for @solana/web3.js — it uses Buffer, process, etc.
       include: ['buffer', 'process'],
       globals: { Buffer: true, process: true },
     }),
   ],
+  publicDir: 'public',
   build: {
     outDir: 'dist',
     target: 'esnext',
