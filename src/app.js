@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v15.4
+   Build: 2026-04-17-v15.5
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v15.4');
+console.log('OmenFi build: 2026-04-14-v15.5');
 'use strict';
 
 // TEMP DEBUG PANEL — remove before final launch
@@ -2403,16 +2403,10 @@ async function restoreServerUnlocks(walletAddress) {
 
 // Fallback: restore from simple localStorage (dev/offline mode)
 function restoreLocalUnlocks() {
-  try {
-    const saved = localStorage.getItem('omenfi_v5_unlocked');
-    if (saved) {
-      JSON.parse(saved).forEach(id => {
-        if (ASSETS[id]) state.unlockedAssets.add(id);
-      });
-      refreshAssetUI();
-      refreshUnlockAllBar();
-    }
-  } catch(e) {}
+  // Only restore from wallet-scoped key — the unscoped legacy key caused
+  // cross-wallet unlock bleed (all wallets on device seeing same unlocks)
+  // loadUnlocked() already handles the scoped restore
+  loadUnlocked();
 }
 
 // ============================================
@@ -3305,14 +3299,37 @@ function trackerLogBuy(stratIdx) {
 }
 
 function trackerDeleteBuy(stratIdx, buyIdx) {
-  if (!confirm('Delete this buy entry?')) return;
-  const data   = trackerLoad();
-  const wallet = state.wallet;
-  if (!data[wallet]?.strategies?.[stratIdx]) return;
-  data[wallet].strategies[stratIdx].buys.splice(buyIdx, 1);
-  data[wallet].updatedAt = Date.now();
-  trackerSave(data);
-  renderTracker();
+  // window.confirm freezes in PWA on Android — use inline confirmation instead
+  const btn = document.querySelector(`[data-strat="${stratIdx}"][data-buy="${buyIdx}"]`);
+  if (!btn) return;
+
+  // If already in confirm state, do the delete
+  if (btn.dataset.confirming === '1') {
+    const data   = trackerLoad();
+    const wallet = state.wallet;
+    if (!data[wallet]?.strategies?.[stratIdx]) return;
+    data[wallet].strategies[stratIdx].buys.splice(buyIdx, 1);
+    data[wallet].updatedAt = Date.now();
+    trackerSave(data);
+    renderTracker();
+    return;
+  }
+
+  // First tap — show confirm state on the button
+  btn.dataset.confirming = '1';
+  btn.textContent = '✓';
+  btn.style.color = 'var(--red)';
+  btn.style.fontWeight = '700';
+
+  // Auto-reset after 3s if not confirmed
+  setTimeout(() => {
+    if (btn && btn.dataset.confirming === '1') {
+      btn.dataset.confirming = '0';
+      btn.textContent = '✕';
+      btn.style.color = '';
+      btn.style.fontWeight = '';
+    }
+  }, 3000);
 }
 
 function trackerDeleteStrategy(stratIdx) {
