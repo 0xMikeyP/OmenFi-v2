@@ -869,6 +869,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
 
 /* Row label — spans full width above each metric group */
 .cg-row-label-above {
+  grid-column: 1 / -1;
   padding: 8px 6px 3px;
   font-family: var(--fm);
   font-size: clamp(0.5rem, 1.6vw, 0.63rem);
@@ -879,9 +880,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(
   background: var(--bg3);
   border-top: 1px solid var(--b);
   text-align: center;
-  white-space: normal;
-  word-break: break-word;
-  hyphens: auto;
+  white-space: nowrap;
   line-height: 1.3;
 }
 .cg-row-label-above:first-of-type,
