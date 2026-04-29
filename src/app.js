@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v15.7
+   Build: 2026-04-17-v15.8
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v15.7');
+console.log('OmenFi build: 2026-04-14-v15.8');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
