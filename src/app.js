@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v15.9
+   Build: 2026-04-17-v16.0
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v15.9');
+console.log('OmenFi build: 2026-04-14-v16.0');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
@@ -3015,18 +3015,38 @@ async function renderTracker() {
     <!-- Progress -->
     <div class="tracker-progress-wrap">
       <div class="tprog-header">
-        <span class="tprog-label">Buy Progress</span>
-        <span class="tprog-count">${stats ? '$' + fmt(stats.totalInvested) + ' of ~$' + fmt(stats.expectedDollars) + ' expected' : '0 invested'}</span>
+        <span class="tprog-label">BUY PROGRESS</span>
+        <span class="tprog-count">${(() => {
+          const periods = calcPeriods(active);
+          const cur = periods.find(p => p.isCurrent);
+          if (!cur) return stats ? '$' + fmt(stats.totalInvested) + ' of ~$' + fmt(stats.expectedDollars) + ' expected' : '0 invested';
+          return '$' + fmt(cur.invested) + ' of ~$' + fmt(cur.target) + ' expected';
+        })()}</span>
       </div>
       <div class="tprog-bar-bg">
-        <div class="tprog-bar-fill" style="width:${stats ? Math.min(100, stats.progressPct).toFixed(1) : 0}%"></div>
+        <div class="tprog-bar-fill" style="width:${(() => {
+          const periods = calcPeriods(active);
+          const cur = periods.find(p => p.isCurrent);
+          if (!cur) return stats ? Math.min(100, stats.progressPct).toFixed(1) : 0;
+          return Math.min(100, (cur.invested / cur.target) * 100).toFixed(1);
+        })()}%"></div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:8px">
         <span style="font-family:var(--fm);font-size:0.62rem;color:var(--t3)">
           Started ${active.startDate || (buys[0]?.date || '—')}
         </span>
-        <span style="font-family:var(--fm);font-size:0.62rem;font-weight:700;color:${stats && stats.completedBuys >= stats.expectedBuys ? 'var(--green)' : 'var(--accent)'}">
-          ${stats ? (stats.completedBuys >= stats.expectedBuys ? '✓ On track' : (stats.expectedBuys - stats.completedBuys) + ' buys behind schedule') : ''}
+        <span style="font-family:var(--fm);font-size:0.62rem;font-weight:700;color:${(() => {
+          const periods = calcPeriods(active);
+          const cur = periods.find(p => p.isCurrent);
+          if (!cur) return 'var(--t3)';
+          return cur.hit ? 'var(--green)' : 'var(--accent)';
+        })()}">
+          ${(() => {
+            const periods = calcPeriods(active);
+            const cur = periods.find(p => p.isCurrent);
+            if (!cur) return '';
+            return cur.hit ? '✓ On track' : '$' + fmt(cur.target - cur.invested) + ' remaining today';
+          })()}
         </span>
       </div>
     </div>
