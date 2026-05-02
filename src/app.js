@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v16.0
+   Build: 2026-04-17-v16.1
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v16.0');
+console.log('OmenFi build: 2026-04-14-v16.1');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
@@ -2690,36 +2690,39 @@ async function doConnect(walletType = 'phantom') {
 
 async function trackerCloudLoad(walletAddress) {
   try {
-    const res = await fetch('/.netlify/functions/tracker-sync', {
-      method: 'POST',
+    const res = await fetch(`/.netlify/functions/tracker-sync?wallet=${encodeURIComponent(walletAddress)}`, {
+      method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'load', wallet: walletAddress }),
     });
     if (!res.ok) return null;
     const data = await res.json();
     if (!data?.success) return null;
 
-    const cloudData = data.data;
-    const cloudUpdated = cloudData?.lastUpdated || 0;
-    const local = trackerLoad();
-    const localData = local[walletAddress];
-    const localUpdated = localData?.lastUpdated || 0;
+    const cloudData    = data.data;
+    const cloudUpdated = cloudData?.lastUpdated || cloudData?.updatedAt || 0;
+    const local        = trackerLoad();
+    const localData    = local[walletAddress];
+    const localUpdated = localData?.lastUpdated || localData?.updatedAt || 0;
 
     if (cloudData && cloudUpdated > localUpdated) {
-      const local = trackerLoad();
+      // Cloud is newer — restore to localStorage
       local[walletAddress] = cloudData;
       try { localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(local)); } catch {}
-      console.log('Tracker: restored from cloud');
-      return data;
+      console.log('Tracker: restored from cloud, strategies:', cloudData.strategies?.length);
+      return cloudData;
     }
 
-    // Local is newer or same — push local to cloud to keep in sync
+    // Local is newer or same — push to cloud to keep in sync
     if (localData && localUpdated >= cloudUpdated) {
       trackerCloudSync(walletAddress, localData).catch(() => {});
+      console.log('Tracker: local is current, synced to cloud');
     }
     return localData || null;
   } catch(e) {
-    return null; // Cloud unavailable — localStorage still works
+    console.warn('trackerCloudLoad failed:', e.message);
+    // Cloud unavailable — fall back to localStorage silently
+    const local = trackerLoad();
+    return local[walletAddress] || null;
   }
 }
 
@@ -2781,7 +2784,19 @@ function trackerLoad() {
 }
 
 function trackerSave(data) {
-  try { localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(data)); } catch {}
+  try {
+    // Ensure updatedAt is set on the wallet's data
+    if (state.wallet && data[state.wallet]) {
+      data[state.wallet].lastUpdated = Date.now();
+    }
+    localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(data));
+    // Always sync to cloud after every save
+    if (state.wallet && data[state.wallet]) {
+      trackerCloudSync(state.wallet, data[state.wallet]).catch(() => {});
+    }
+  } catch(e) {
+    console.warn('trackerSave failed:', e.message);
+  }
 }
 
 function trackerUnlockSlot() {
@@ -3359,11 +3374,12 @@ async function trackerUnlockSlotFull() {
 
 async function trackerCloudSync(walletAddress, walletData) {
   try {
-    await fetch('/.netlify/functions/tracker-sync', {
+    const res = await fetch(`/.netlify/functions/tracker-sync?wallet=${encodeURIComponent(walletAddress)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'save', wallet: walletAddress, data: walletData }),
+      body: JSON.stringify({ data: walletData }),
     });
+    if (!res.ok) console.warn('trackerCloudSync: server returned', res.status);
   } catch(e) {
     console.warn('trackerCloudSync failed:', e.message);
   }
