@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v16.3
+   Build: 2026-04-17-v16.4
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v16.3');
+console.log('OmenFi build: 2026-04-14-v16.4');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
@@ -348,6 +348,31 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('modal-close').addEventListener('click', closeModal);
   $('modal-backdrop').addEventListener('click', e => { if(e.target===$('modal-backdrop')) closeModal(); });
+
+  // Bug report dialog
+  const bugBtn = $('bug-report-btn');
+  if (bugBtn) {
+    bugBtn.addEventListener('click', e => {
+      e.preventDefault();
+      $('modal-inner').innerHTML = `
+        <div style="text-align:center;padding:8px 0">
+          <div style="font-size:2rem;margin-bottom:12px">🐛</div>
+          <div class="mi-title">Found a Bug?</div>
+          <div class="mi-sub" style="margin-top:12px;line-height:1.7">
+            Send us a DM on X and we'll get it fixed.<br><br>
+            <strong style="color:var(--accent);font-size:1.1rem">@omenfi</strong><br><br>
+            <span style="font-size:0.78rem;color:var(--t3)">Open X → Search @omenfi → Message</span>
+          </div>
+          <button class="run-btn" style="margin-top:20px;width:100%" onclick="window.open('https://x.com/omenfi','_blank');document.getElementById('modal-backdrop').style.display='none';">
+            <span>Open @omenfi on X</span><span>→</span>
+          </button>
+          <button class="sec-btn" style="margin-top:8px;width:100%" onclick="document.getElementById('modal-backdrop').style.display='none';">
+            Close
+          </button>
+        </div>`;
+      $('modal-backdrop').style.display = 'flex';
+    });
+  }
   // Tip button — inline onclick doesn't work in Vite modules
   const tipBtn = $('tip-btn');
   if (tipBtn) tipBtn.addEventListener('click', openTipModal);
