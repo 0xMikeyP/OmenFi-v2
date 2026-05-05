@@ -2,9 +2,9 @@
    OMENFI v5 — Pure historical backtester
    No future projections. Real prices only.
    API: CryptoCompare free (no key needed)
-   Build: 2026-04-17-v16.4
+   Build: 2026-04-17-v16.5
    ============================================ */
-console.log('OmenFi build: 2026-04-14-v16.4');
+console.log('OmenFi build: 2026-04-14-v16.5');
 'use strict';
 
 // Sanitize any string before inserting into innerHTML — prevents XSS
@@ -1884,6 +1884,8 @@ function isSolflareInjected()  { return !!(window.solflare?.isSolflare); }
 function renderConnect() {
   const phantomReady  = isPhantomInjected();
   const solflareReady = isSolflareInjected();
+  const firstTime     = IS_ANDROID && !localStorage.getItem('omenfi_seeker_connected');
+
   $('modal-inner').innerHTML = `
     <div class="mi-title">Connect Wallet</div>
     <div class="mi-sub">Choose your wallet to get started</div>
@@ -1924,6 +1926,13 @@ function renderConnect() {
         <span style="margin-left:auto">→</span>
       </button>
     </div>
+    ${firstTime ? `
+    <div style="margin-top:12px;padding:10px 14px;background:rgba(255,140,42,0.07);border:1px solid rgba(255,140,42,0.2);border-radius:8px;font-size:0.75rem;color:var(--t2);line-height:1.5">
+      <strong style="color:var(--accent)">📱 First time on Seeker?</strong><br>
+      If prompted, tap <strong style="color:var(--text)">"Got it"</strong> then go to
+      <strong style="color:var(--text)">Chrome Site Settings → Allow "Apps on Device"</strong>.
+      This is a one-time step — you'll never see it again.
+    </div>` : ''}
     <p class="mi-note">OmenFi never stores your private keys. Payments verified on-chain.</p>
     <div id="connect-error" style="display:none;color:var(--red);font-family:var(--fm);font-size:.78rem;text-align:center;margin-top:8px;padding:8px;background:rgba(255,58,92,.08);border-radius:6px;border:1px solid rgba(255,58,92,.2)"></div>
   `;
@@ -2600,6 +2609,8 @@ async function onWalletConnected(pubkey, provider) {
   state.walletProvider = provider;
   saveWallet(pubkey);
   saveWalletProvider(provider);
+  // Mark Seeker as having connected before — hides the first-time permission hint
+  if (provider === 'seedvault') localStorage.setItem('omenfi_seeker_connected', '1');
   $('wallet-btn-text').textContent = pubkey.slice(0,4)+'...'+pubkey.slice(-4);
   $('wallet-btn').classList.add('connected');
   loadUnlocked();
