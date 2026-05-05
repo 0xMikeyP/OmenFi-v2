@@ -1,5 +1,5 @@
 // OmenFi Service Worker — cache busting on every deploy
-const CACHE_NAME = 'omenfi-v16.3';
+const CACHE_NAME = 'omenfi-v16.4';
 
 // On install — cache nothing, let browser handle it
 self.addEventListener('install', () => {
