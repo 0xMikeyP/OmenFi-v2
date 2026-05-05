@@ -75,3 +75,13 @@
   window_limit = 30
   window_size = 60
   action = "deny"
+
+[[redirects]]
+  from = "/terms"
+  to = "/terms.html"
+  status = 200
+
+[[redirects]]
+  from = "/privacy"
+  to = "/privacy.html"
+  status = 200
