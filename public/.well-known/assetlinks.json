@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.omenfi.app",
+    "sha256_cert_fingerprints": ["2F:6A:D4:3B:BF:55:05:7B:A8:2F:71:76:4A:59:C0:DD:46:14:0A:02:BB:23:D5:52:6D:EE:F7:B4:06:CD:01:A9"]
+  }
+}]
