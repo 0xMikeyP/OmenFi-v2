@@ -99,3 +99,10 @@
   to = "/assetlinks.json"
   status = 200
   force = true
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+    Access-Control-Allow-Origin = "*"
+    Cache-Control = "no-cache"
